@@ -1,0 +1,32 @@
+{
+  "name": "can-sensor-api",
+  "version": "1.0.0",
+  "description": "API unificada para dados CAN e sensores genéricos",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "can-bus",
+    "sensors",
+    "telemetry",
+    "dbc"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.0",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
