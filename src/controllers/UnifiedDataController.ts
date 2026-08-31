@@ -28,7 +28,7 @@ class UnifiedDataController {
    * GET /api/unified/:id
    */
   getById = (req: Request, res: Response<IApiResponse>): void => {
-    const record = UnifiedDataModel.findById(req.params.id);
+    const record = UnifiedDataModel.findById(req.params.id as string);
     if (!record) {
       res.status(404).json({ success: false, error: "Registro não encontrado." });
       return;

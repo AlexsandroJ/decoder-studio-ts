@@ -77,7 +77,7 @@ class CanDataController {
    * GET /api/can/frames/:id
    */
   getById = (req: Request, res: Response<IApiResponse>): void => {
-    const frame = CanFrameModel.findById(req.params.id);
+    const frame = CanFrameModel.findById(req.params.id as string);
     if (!frame) {
       res.status(404).json({ success: false, error: "Frame não encontrado." });
       return;

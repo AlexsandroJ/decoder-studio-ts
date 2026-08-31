@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Move Studio</title>
+    <link rel="shortcut icon" type="image/png" href="./img/MoDCS-Logo.png">
+
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/viewer.css">
+
+</head>
+
+<body>
+    <div class="container">
+
+        <!-- HEADER (mesmo estilo do dashboard) -->
+        <header>
+            <h1>
+                <span class="logo">📊</span>
+                Move Viewer
+            </h1>
+            <div class="header-config">
+                <input type="text" id="baseUrl" value="https://localhost:3001/api" placeholder="API URL">
+                <button class="btn btn-accent" onclick="checkHealth()">❤️ Health</button>
+                <a href="decoder-studio.html" class="btn btn-nav" title="Voltar ao Dashboard"> Studio</a>
+                <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">🌙</button>
+            </div>
+        </header>
+
+        <!-- BARRA DE STATUS -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-dot" id="liveDot"></span>
+                <span id="liveStatus">Desconectado</span>
+            </div>
+            <div class="status-item">
+                <span>📡 Widgets:</span>
+                <span class="count" id="widgetCount">0</span>
+            </div>
+            <div class="status-item">
+                <span>🔄 Última:</span>
+                <span id="lastUpdate">—</span>
+            </div>
+            <div class="status-item">
+                <span>️ Intervalo:</span>
+                <input type="number" id="refreshInterval" value="1000" min="100" step="100">
+                <span>ms</span>
+            </div>
+            <div class="status-actions">
+                <button class="btn-mini" onclick="toggleLive()" id="liveBtn">▶️ Iniciar Live</button>
+                <button class="btn-mini" onclick="refreshNow()">🔄 Atualizar</button>
+                <button class="btn-mini" onclick="openConfigPanel()">⚙️ Configurar</button>
+                <button class="btn-mini" onclick="clearAllWidgets()">🗑️ Limpar</button>
+            </div>
+        </div>
+
+        <!-- GRID DE WIDGETS -->
+        <div class="viewer-grid" id="viewerGrid">
+            <div class="empty-viewer" id="emptyViewer">
+                <div class="empty-icon">📊</div>
+                <h3>Nenhum widget configurado</h3>
+                <p>Clique em <strong>️ Configurar</strong> para adicionar sinais e sensores</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL DE CONFIGURAÇÃO -->
+    <div class="config-overlay" id="configOverlay" onclick="if(event.target===this)closeConfigPanel()">
+        <div class="config-panel">
+            <div class="config-header">
+                <h2>⚙️ Configurar Widgets</h2>
+                <button class="btn-mini" onclick="closeConfigPanel()">✕ Fechar</button>
+            </div>
+
+            <div class="config-tabs">
+                <div class="config-tab active" onclick="switchConfigTab(event, 'signals')">📡 Sinais CAN</div>
+                <div class="config-tab" onclick="switchConfigTab(event, 'sensors')">🌡️ Sensores</div>
+                <div class="config-tab" onclick="switchConfigTab(event, 'saved')"> Salvos</div>
+            </div>
+
+            <div class="config-content">
+                <div class="config-tab-content active" id="config-signals">
+                    <div class="config-toolbar">
+                        <button class="btn btn-primary" onclick="loadSignalsFromApi()">🔄 Carregar da API</button>
+                        <input type="text" id="signalSearch" placeholder="🔍 Buscar sinal..." oninput="filterSignals()">
+                    </div>
+                    <div class="signal-list" id="signalList">
+                        <div class="empty-config">Clique em " Carregar da API" para ver sinais disponíveis</div>
+                    </div>
+                </div>
+
+                <div class="config-tab-content" id="config-sensors">
+                    <div class="config-toolbar">
+                        <button class="btn btn-primary" onclick="loadSensorsFromApi()">🔄 Carregar da API</button>
+                        <input type="text" id="sensorSearch" placeholder="🔍 Buscar sensor..."
+                            oninput="filterSensors()">
+                    </div>
+                    <div class="signal-list" id="sensorList">
+                        <div class="empty-config">Clique em "🔄 Carregar da API" para ver sensores disponíveis</div>
+                    </div>
+                </div>
+
+                <div class="config-tab-content" id="config-saved">
+                    <div class="config-toolbar">
+                        <button class="btn btn-primary" onclick="saveCurrentConfig()">💾 Salvar atual</button>
+                        <button class="btn" onclick="loadSavedConfig()">📂 Carregar</button>
+                        <button class="btn btn-danger" onclick="deleteSavedConfig()">🗑️ Apagar</button>
+                    </div>
+                    <div class="saved-list" id="savedList">
+                        <div class="empty-config">Nenhuma configuração salva</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE EDIÇÃO DE WIDGET -->
+    <div class="config-overlay" id="editOverlay" onclick="if(event.target===this)closeEditPanel()">
+        <div class="config-panel">
+            <div class="config-header">
+                <h2>✏️ Personalizar Widget</h2>
+                <button class="btn-mini" onclick="closeEditPanel()">✕ Fechar</button>
+            </div>
+            <div class="edit-form" id="editForm"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="js/viewer-state.js"></script>
+    <script src="js/viewer-config.js"></script>
+    <script src="js/viewer-widgets.js"></script>
+    <script src="js/viewer-live.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,148 @@
+.sniffer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed; /* IMPORTANTE: mantém colunas fixas */
+}
+
+.sniffer-table thead {
+  background: var(--bg-elevated);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.sniffer-table th {
+  padding: 8px 4px;
+  text-align: center; /* Centraliza cabeçalhos */
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* Larguras específicas para cada coluna */
+.sniffer-table th:nth-child(1) { width: 100px; text-align: left; padding-left: 12px; } /* CAN ID */
+.sniffer-table th:nth-child(2) { width: 70px; } /* FREQ */
+.sniffer-table th:nth-child(3),
+.sniffer-table th:nth-child(4),
+.sniffer-table th:nth-child(5),
+.sniffer-table th:nth-child(6),
+.sniffer-table th:nth-child(7),
+.sniffer-table th:nth-child(8),
+.sniffer-table th:nth-child(9),
+.sniffer-table th:nth-child(10) { width: 45px; } /* Bytes 0-7 */
+.sniffer-table th:nth-child(11) { width: 70px; } /* FRAMES */
+
+.sniffer-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: var(--text);
+  vertical-align: middle;
+  text-align: center; /* Centraliza células */
+  white-space: nowrap; /* Evita quebra de linha */
+  overflow: hidden;
+}
+
+.sniffer-table td:first-child {
+  text-align: left;
+  padding-left: 12px;
+  font-weight: 600;
+  color: var(--purple);
+}
+
+.sniffer-table tbody tr {
+  transition: background 0.15s;
+  cursor: pointer;
+}
+
+.sniffer-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.sniffer-table tbody tr.selected {
+  background: rgba(88, 166, 255, 0.15);
+  border-left: 3px solid var(--accent);
+}
+
+/* Bytes individuais */
+.byte-cell-small {
+  display: inline-block;
+  width: 32px; /* Largura fixa */
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.3s;
+  margin: 0 1px;
+}
+
+.byte-cell-small.increased {
+  background: rgba(63, 185, 80, 0.3);
+  color: #4ade80;
+  box-shadow: 0 0 6px rgba(63, 185, 80, 0.4);
+}
+
+.byte-cell-small.decreased {
+  background: rgba(248, 81, 73, 0.3);
+  color: #f87171;
+  box-shadow: 0 0 6px rgba(248, 81, 73, 0.4);
+}
+
+.byte-cell-small.same {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.byte-cell-small.neutral {
+  background: transparent;
+  color: var(--text-dim);
+}
+
+/* Frequência */
+.freq-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  color: var(--cyan);
+  font-family: 'Consolas', monospace;
+  white-space: nowrap;
+}
+
+/* Contador de frames */
+.frame-count {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-family: 'Consolas', monospace;
+}
+
+/* Scroll horizontal para telas pequenas */
+.sniffer-scroll {
+  max-height: 600px;
+  overflow-x: auto;
+  overflow-y: auto;
+  border-radius: 8px;
+}
+
+/* Responsivo */
+@media (max-width: 1200px) {
+  .sniffer-table {
+    font-size: 10px;
+  }
+  .sniffer-table th:nth-child(3) through .sniffer-table th:nth-child(10) {
+    width: 38px;
+  }
+  .byte-cell-small {
+    width: 28px;
+    padding: 2px 4px;
+    font-size: 10px;
+  }
+}

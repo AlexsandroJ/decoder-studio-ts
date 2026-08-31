@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Move Studio</title>
+  <link rel="shortcut icon" type="image/png" href="./img/MoDCS-Logo.png">
+
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/bit-matrix.css">
+  <link rel="stylesheet" href="css/analyzer.css">
+  <link rel="stylesheet" href="css/sniffer.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+
+<body>
+  <div class="container">
+
+    <header>
+      <h1>
+        <span class="logo">🔧</span>
+        Move Studio
+      </h1>
+      <div class="header-config">
+        <input type="text" id="baseUrl" value="https://localhost:3001/api" placeholder="API URL">
+        <button class="btn btn-accent" onclick="checkHealth()">❤️ Health</button>
+
+        <!-- 🆕 BOTÃO DE NAVEGAÇÃO -->
+        <a href="viewer.html" class="btn btn-nav" title="Abrir Data Viewer">
+          📊 Viewer
+        </a>
+
+        <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle"></button>
+      </div>
+    </header>
+
+    <div class="main-grid">
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>📡 Frame CAN — Editor Visual</h2>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-mini" onclick="loadExampleFrame()">📋 Exemplo</button>
+            <button class="btn-mini" onclick="randomizeFrame()">🎲 Aleatório</button>
+          </div>
+        </div>
+        <div class="panel-body">
+
+          <div class="frame-input-row">
+            <div class="input-group">
+              <label>CAN ID (hex)</label>
+              <input type="text" id="canId" value="0x1A3" oninput="handleCanIdChange()">
+            </div>
+            <div class="input-group">
+              <label>Data (hex) — até 8 bytes</label>
+              <input type="text" id="hexData" value="E8035A0000000000" oninput="updateFromHex()">
+            </div>
+            <div class="input-group">
+              <label>DLC</label>
+              <input type="number" id="dlc" value="8" min="0" max="8">
+            </div>
+          </div>
+
+          <div class="bit-matrix-container">
+            <div class="bit-matrix-header">
+              <h3>🔢 Matriz de Bits <span style="color:var(--text-dim); font-weight:normal; font-size:11px;">(clique
+                  para alternar • shift+clique para range)</span></h3>
+              <div class="bit-matrix-actions">
+                <button class="btn-mini" onclick="clearSelection()">Limpar seleção</button>
+                <button class="btn-mini" onclick="selectAllBits()">Selecionar todos</button>
+              </div>
+            </div>
+            <div id="bitMatrix"></div>
+          </div>
+
+          <div class="signal-editor">
+            <h3>
+              ✏️ Propriedades do Sinal
+              <span class="badge" id="selectionBadge">0 bits</span>
+              <span class="editing-indicator" id="editingIndicator" style="display:none;">Editando: <span
+                  id="editingRuleName"></span></span>
+            </h3>
+
+            <div class="signal-form">
+              <div class="input-group full-width">
+                <label>Nome do Sinal</label>
+                <input type="text" id="signalName" placeholder="Ex: EngineRPM" value="EngineRPM">
+              </div>
+              <div class="input-group">
+                <label>Start Bit</label>
+                <input type="number" id="startBit" value="0" min="0" max="63" oninput="updateSelectionFromInputs()">
+              </div>
+              <div class="input-group">
+                <label>Bit Length</label>
+                <input type="number" id="bitLength" value="16" min="1" max="64" oninput="updateSelectionFromInputs()">
+              </div>
+              <div class="input-group">
+                <label>Byte Order</label>
+                <select id="byteOrder">
+                  <option value="little">Little Endian (Intel)</option>
+                  <option value="big">Big Endian (Motorola)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Unit</label>
+                <input type="text" id="unit" placeholder="rpm, °C, km/h" value="rpm">
+              </div>
+              <div class="input-group">
+                <label>Factor</label>
+                <input type="number" id="factor" value="0.25" step="any">
+              </div>
+              <div class="input-group">
+                <label>Offset</label>
+                <input type="number" id="offset" value="0" step="any">
+              </div>
+              <div class="full-width checkbox-row">
+                <label><input type="checkbox" id="signed"> Signed</label>
+                <label>Min: <input type="number" id="minValue" step="any"
+                    style="width:80px; margin-left:6px; background:var(--bg-elevated); border:1px solid var(--border); color:var(--text); padding:4px 6px; border-radius:4px;"></label>
+                <label>Max: <input type="number" id="maxValue" step="any"
+                    style="width:80px; margin-left:6px; background:var(--bg-elevated); border:1px solid var(--border); color:var(--text); padding:4px 6px; border-radius:4px;"></label>
+              </div>
+            </div>
+
+            <div class="preview-box">
+              <div class="preview-row">
+                <span class="preview-label">Raw Value (hex)</span>
+                <span class="preview-value" id="previewRaw">0x0000</span>
+              </div>
+              <div class="preview-row">
+                <span class="preview-label">Raw Value (decimal)</span>
+                <span class="preview-value" id="previewDecimal">0</span>
+              </div>
+              <div class="preview-row">
+                <span class="preview-label">Physical Value</span>
+                <span class="preview-value big" id="previewPhysical">0 rpm</span>
+              </div>
+            </div>
+
+            <div class="action-bar">
+              <button class="btn btn-primary" onclick="saveRule()">💾 Salvar Regra</button>
+              <button class="btn" onclick="newRule()">🆕 Nova Regra</button>
+              <button class="btn btn-accent" onclick="sendFrameWithRules()">🚀 Enviar Frame + Regras</button>
+              <button class="btn" onclick="sendFrameOnly()">📤 Só Frame</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>📖 Regras <span id="rulesCount" style="color:var(--text-dim); font-size:12px; font-weight:normal;"></span>
+          </h2>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-mini" onclick="loadRulesFromApi()">🔄 API</button>
+            <button class="btn-mini" onclick="clearRules()">🗑️</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div id="rulesList" class="rules-list">
+            <div class="empty-state">
+              <div class="icon">📋</div>
+              <div>Nenhuma regra criada</div>
+              <div style="font-size:11px; margin-top:6px;">Selecione bits e salve uma regra</div>
+            </div>
+          </div>
+          <div class="action-bar" style="margin-top:16px;">
+            <button class="btn btn-accent" onclick="syncRulesToApi()" style="flex:1;">🔄 Sincronizar com API</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="panel">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(event,'rawdata')">📊 Dados Brutos</div>
+        <div class="tab" onclick="switchTab(event,'analyzer')">🔬 Byte Analyzer</div>
+        <div class="tab" onclick="switchTab(event,'sensors')">️ Sensores</div>
+        <div class="tab" onclick="switchTab(event,'unified')">🔗 Unified</div>
+        <div class="tab" onclick="switchTab(event,'log')">📜 Log</div>
+      </div>
+
+      <div class="tab-content active" id="tab-rawdata">
+        <div class="panel-body">
+          <div class="raw-data-container">
+            <div class="raw-data-toolbar">
+              <div class="filters">
+                <select id="rawDataSource" onchange="renderRawData()">
+                  <option value="all">Todas as fontes</option>
+                  <option value="can">CAN Frames</option>
+                  <option value="sensor">Sensores</option>
+                  <option value="merged">Merged</option>
+                </select>
+                <input type="text" id="rawDataFilter" placeholder="🔍 Filtrar..." oninput="renderRawData()"
+                  style="width:200px;">
+                <select id="rawDataSort" onchange="renderRawData()">
+                  <option value="time-desc">Mais recente</option>
+                  <option value="time-asc">Mais antigo</option>
+                </select>
+              </div>
+              <div style="display:flex; gap:6px;">
+                <button class="btn-mini" onclick="refreshRawData()">🔄 Atualizar</button>
+                <button class="btn-mini" onclick="exportRawData()">💾 Exportar</button>
+              </div>
+            </div>
+
+            <div class="raw-data-scroll">
+              <table class="raw-data-table">
+                <thead>
+                  <tr>
+                    <th style="width:130px;">Timestamp</th>
+                    <th style="width:70px;">Fonte</th>
+                    <th style="width:80px;">CAN ID</th>
+                    <th style="width:170px;">Playload</th>
+                    <th>Sinais / Leituras</th>
+                    <th style="width:60px;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="rawDataBody">
+                  <tr>
+                    <td colspan="6" class="raw-data-empty">Clique em "🔄 Atualizar" para carregar dados</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="raw-data-stats">
+              <span>Total: <span class="count" id="statTotal">0</span></span>
+              <span>CAN: <span class="count" id="statCan">0</span></span>
+              <span>Sensor: <span class="count" id="statSensor">0</span></span>
+              <span>Merged: <span class="count" id="statMerged">0</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-analyzer">
+        <div class="panel-body">
+
+          <div class="raw-data-container" style="margin-bottom:20px;">
+            <div class="raw-data-toolbar">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <h3 style="color:var(--text-bright); font-size:14px;">📡 Sniffer — Todos os CAN IDs</h3>
+                <span style="color:var(--text-dim); font-size:11px;">(clique em uma linha para analisar)</span>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="text" id="snifferFilter" placeholder="🔍 Filtrar ID..." oninput="renderSnifferTable()"
+                  style="width:150px;">
+                <button class="btn-mini" onclick="refreshAnalyzer()">🔄 Atualizar</button>
+              </div>
+            </div>
+            <div class="sniffer-scroll">
+              <table class="sniffer-table">
+                <thead>
+                  <tr>
+                    <th style="width:100px;">CAN ID</th>
+                    <th style="width:80px;">Freq</th>
+                    <th style="width:60px;">0</th>
+                    <th style="width:60px;">1</th>
+                    <th style="width:60px;">2</th>
+                    <th style="width:60px;">3</th>
+                    <th style="width:60px;">4</th>
+                    <th style="width:60px;">5</th>
+                    <th style="width:60px;">6</th>
+                    <th style="width:60px;">7</th>
+                    <th style="width:70px;">Frames</th>
+                  </tr>
+                </thead>
+                <tbody id="snifferBody">
+                  <tr>
+                    <td colspan="11" class="raw-data-empty">Clique em "🔄 Atualizar" para carregar frames</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="byte-analyzer-container">
+
+            <div class="byte-analyzer-sidebar">
+              <div class="byte-analyzer-sidebar-header">
+                <h3>📋 IDs Disponíveis</h3>
+                <input type="text" id="analyzerSearch" placeholder="🔍 Buscar ID..." oninput="renderCanIdList()">
+              </div>
+              <div class="can-id-list" id="canIdList">
+                <div class="empty-state">
+                  <div class="icon"></div>
+                  <div>Nenhum CAN ID</div>
+                  <div style="font-size:11px; margin-top:6px;">Envie frames para ver aqui</div>
+                </div>
+              </div>
+              <div style="padding:12px; border-top:1px solid var(--border);">
+                <div class="analyzer-controls">
+                  <label>
+                    <input type="checkbox" id="autoRefresh" checked>
+                    Auto-refresh
+                  </label>
+                </div>
+                <div class="analyzer-controls" style="margin-top:6px;">
+                  <label>
+                    Intervalo:
+                    <input type="number" id="refreshInterval" value="1000" min="100" step="100"> ms
+                  </label>
+                </div>
+                <button class="btn-mini" onclick="refreshAnalyzer()" style="width:100%; margin-top:8px;">🔄 Atualizar
+                  agora</button>
+              </div>
+            </div>
+
+            <div class="byte-analyzer-main">
+
+              <div class="byte-matrix-visual">
+                <h3>
+                  🔬 Análise de Bytes —
+                  <span class="can-id-display" id="analyzerCanId">—</span>
+                </h3>
+                <div class="byte-grid" id="byteGrid">
+                  <div class="empty-state" style="grid-column: 1 / -1;">
+                    <div class="icon"></div>
+                    <div>Selecione um CAN ID na tabela acima</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="translations-table">
+                <div class="translations-table-header">
+                  <h3>📝 Traduções dos Bytes</h3>
+                  <button class="btn-mini" onclick="exportTranslations()">💾 Exportar</button>
+                </div>
+                <div class="translations-grid" id="translationsGrid">
+                  <div class="header">Byte</div>
+                  <div class="header">Label / Nome</div>
+                  <div class="header">Tipo</div>
+                  <div class="header">Valor Atual</div>
+                </div>
+              </div>
+
+              <div class="frames-history">
+                <div class="frames-history-header">
+                  <h3>📜 Histórico de Frames (últimos 20)</h3>
+                </div>
+                <div class="frames-history-scroll">
+                  <table class="frames-history-table">
+                    <thead>
+                      <tr>
+                        <th style="width:140px;">Timestamp</th>
+                        <th>Bytes (hex)</th>
+                        <th style="width:60px;">DLC</th>
+                      </tr>
+                    </thead>
+                    <tbody id="framesHistoryBody">
+                      <tr>
+                        <td colspan="3" class="raw-data-empty">Nenhum frame ainda</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-sensors">
+        <div class="panel-body">
+          <div class="simple-form">
+            <div class="input-group">
+              <label>Payload JSON</label>
+              <textarea id="sensorPayload"></textarea>
+            </div>
+            <div class="action-bar">
+              <button class="btn btn-primary" onclick="sendSensors()">📤 Enviar</button>
+              <button class="btn" onclick="listSensors()">📥 Listar</button>
+              <button class="btn btn-danger" onclick="clearSensors()">🗑️ Limpar</button>
+            </div>
+            <div class="response-box" id="sensorResponse">
+              <pre>Aguardando...</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-unified">
+        <div class="panel-body">
+          <div class="simple-form">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+              <div class="input-group">
+                <label>Filtro (source)</label>
+                <select id="unifiedSource"
+                  style="width:100%; background:var(--bg-elevated); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:6px;">
+                  <option value="">Todos</option>
+                  <option value="can">CAN</option>
+                  <option value="sensor">Sensor</option>
+                  <option value="merged">Merged</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Window (ms)</label>
+                <input type="number" id="mergeWindow" value="1000">
+              </div>
+              <div class="input-group">
+                <label>Limite</label>
+                <input type="number" id="unifiedLimit" value="100">
+              </div>
+            </div>
+            <div class="action-bar">
+              <button class="btn btn-accent" onclick="mergeUnified()">🔀 Merge</button>
+              <button class="btn btn-primary" onclick="listUnified()">📥 Listar</button>
+              <button class="btn btn-danger" onclick="clearUnified()">️ Limpar</button>
+            </div>
+            <div class="response-box" id="unifiedResponse">
+              <pre>Aguardando...</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-log">
+        <div class="panel-body">
+          <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <h3 style="color:var(--text-bright);">📜 Histórico</h3>
+            <button class="btn-mini" onclick="clearLog()">Limpar</button>
+          </div>
+          <div class="response-box" id="logBox" style="max-height:500px;">
+            <pre style="color:var(--text-dim);">Nenhuma requisição ainda...</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div id="modalContainer"></div>
+
+  <script src="js/state.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/bit-matrix.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/raw-data.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/sensors.js"></script>
+  <script src="js/unified.js"></script>
+  <script src="js/log.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>

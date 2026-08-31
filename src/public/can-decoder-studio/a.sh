@@ -1,702 +1,827 @@
+#!/bin/bash
+set -e
+
+PROJECT_DIR="can-decoder-studio"
+
+echo "🔧 Criando estrutura do CAN Signal Decoder Studio..."
+
+# Criar diretórios
+mkdir -p "$PROJECT_DIR"/{css,js,public}
+
+# ════════════════════════════════════════════════════════
+#  1. CSS - VARIÁVEIS DE TEMA
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/variables.css" << 'EOF'
+:root {
+  --bg-dark: #0d1117;
+  --bg-panel: #161b22;
+  --bg-elevated: #1c2128;
+  --bg-hover: #2d333b;
+  --border: #30363d;
+  --border-bright: #484f58;
+  --text: #c9d1d9;
+  --text-dim: #8b949e;
+  --text-bright: #f0f6fc;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --green-dim: #238636;
+  --red: #f85149;
+  --orange: #d29922;
+  --purple: #bc8cff;
+  --cyan: #39d2c0;
+  --bit-off: #21262d;
+  --bit-on: #1f6feb;
+  --bit-selected: #f78166;
+  --bit-hover: #388bfd;
+  --shadow: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] {
+  --bg-dark: #ffffff;
+  --bg-panel: #f6f8fa;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f3f4f6;
+  --border: #d0d7de;
+  --border-bright: #afb8c1;
+  --text: #1f2328;
+  --text-dim: #656d76;
+  --text-bright: #0d1117;
+  --accent: #0969da;
+  --green: #1a7f37;
+  --green-dim: #2da042;
+  --red: #cf222e;
+  --orange: #bf8700;
+  --purple: #8250df;
+  --cyan: #0550ae;
+  --bit-off: #eaeef2;
+  --bit-on: #0969da;
+  --bit-selected: #d18616;
+  --bit-hover: #0969da;
+  --shadow: rgba(0, 0, 0, 0.1);
+}
+EOF
+
+# ════════════════════════════════════════════════════════
+#  2. CSS - BASE
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/base.css" << 'EOF'
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 20px;
+  font-size: 14px;
+  transition: background 0.3s, color 0.3s;
+}
+
+.container { max-width: 1800px; margin: 0 auto; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  3. CSS - LAYOUT
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/layout.css" << 'EOF'
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 20px 24px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+header h1 {
+  font-size: 1.6em; color: var(--text-bright);
+  display: flex; align-items: center; gap: 12px;
+}
+
+header h1 .logo {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3em;
+}
+
+.header-config { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.header-config input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  width: 260px;
+}
+
+.header-config input:focus { outline: none; border-color: var(--accent); }
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--bg-elevated);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.panel-header h2 {
+  font-size: 1.1em; color: var(--text-bright);
+  display: flex; align-items: center; gap: 10px;
+}
+
+.panel-body { padding: 20px; }
+
+.tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-elevated); overflow-x: auto; }
+.tab { padding: 12px 20px; cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: 13px; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  4. CSS - COMPONENTES
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/components.css" << 'EOF'
+.frame-input-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 100px;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.input-group input, .input-group select {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 14px;
+}
+
+.input-group input:focus, .input-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+}
+
+.btn-mini {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-mini:hover {
+  background: var(--bg-hover);
+  color: var(--text-bright);
+  border-color: var(--border-bright);
+}
+
+.btn {
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.btn:hover { background: var(--bg-hover); border-color: var(--border-bright); }
+.btn-primary { background: var(--green-dim); color: white; border-color: var(--green); }
+.btn-primary:hover { background: var(--green); }
+.btn-accent { background: #1f6feb; color: white; border-color: var(--accent); }
+.btn-accent:hover { background: var(--accent); }
+.btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
+.btn-danger:hover { background: var(--red); color: white; }
+
+.action-bar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-dim); }
+.empty-state .icon { font-size: 3em; margin-bottom: 10px; opacity: 0.3; }
+
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--green);
+  padding: 12px 20px; border-radius: 6px;
+  box-shadow: 0 8px 24px var(--shadow);
+  z-index: 1000;
+  transform: translateX(400px);
+  transition: transform 0.3s;
+}
+
+.toast.show { transform: translateX(0); }
+.toast.error { border-left-color: var(--red); }
+
+.response-box {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.response-box pre { font-family: 'Consolas', monospace; font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.response-box.success { border-color: var(--green); }
+.response-box.error { border-color: var(--red); }
+
+.simple-form textarea {
+  width: 100%; min-height: 140px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  padding: 12px; border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+  resize: vertical; margin-bottom: 12px;
+}
+
+.simple-form textarea:focus { outline: none; border-color: var(--accent); }
+
+.detail-modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.detail-modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 90%; max-width: 700px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.detail-modal h3 { color: var(--text-bright); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+.detail-modal pre {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--green);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.signal-editor {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.signal-editor h3 {
+  font-size: 0.95em; color: var(--text-bright);
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+
+.signal-editor h3 .badge {
+  background: var(--bit-selected);
+  color: white;
+  padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+}
+
+.editing-indicator {
+  background: var(--orange);
+  color: white;
+  padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+  margin-left: auto;
+}
+
+.signal-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.signal-form .full-width { grid-column: 1 / -1; }
+
+.signal-form input, .signal-form select {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  padding: 8px 10px; border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.signal-form input:focus, .signal-form select:focus { outline: none; border-color: var(--accent); }
+
+.checkbox-row { display: flex; gap: 16px; align-items: center; padding: 8px 0; flex-wrap: wrap; }
+.checkbox-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text); font-size: 13px; }
+.checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.preview-box {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.preview-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.preview-row:last-child { border-bottom: none; }
+
+.preview-label { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.preview-value { color: var(--green); font-family: 'Consolas', monospace; font-size: 15px; font-weight: 600; }
+.preview-value.big { font-size: 22px; color: var(--cyan); }
+
+.rules-list { display: flex; flex-direction: column; gap: 10px; max-height: 600px; overflow-y: auto; }
+
+.rule-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rule-card:hover { border-color: var(--accent); transform: translateX(2px); }
+.rule-card.active { border-color: var(--bit-selected); background: rgba(247,129,102,0.05); box-shadow: 0 0 0 2px rgba(247,129,102,0.2); }
+
+.rule-card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; }
+.rule-name { color: var(--text-bright); font-weight: 600; font-size: 14px; }
+.rule-canid { background: var(--bg-dark); color: var(--purple); padding: 2px 8px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 11px; }
+.rule-meta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+.rule-meta span { background: var(--bg-dark); padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; }
+.rule-value { color: var(--green); font-family: 'Consolas', monospace; font-weight: 600; font-size: 16px; }
+.rule-actions { display: flex; gap: 6px; margin-top: 8px; }
+.rule-actions button { padding: 4px 8px; font-size: 11px; }
+
+.raw-data-container {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.raw-data-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.raw-data-toolbar .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.raw-data-toolbar select, .raw-data-toolbar input {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px; border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Consolas', monospace;
+}
+
+.raw-data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.raw-data-table thead { background: var(--bg-elevated); position: sticky; top: 0; z-index: 1; }
+.raw-data-table th {
+  padding: 10px 12px; text-align: left;
+  color: var(--text-dim); font-weight: 600;
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+.raw-data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; color: var(--text); vertical-align: top; }
+.raw-data-table tbody tr { transition: background 0.1s; }
+.raw-data-table tbody tr:hover { background: var(--bg-hover); }
+
+.hex-data { color: var(--cyan); font-weight: 600; letter-spacing: 1px; }
+.can-id-cell { color: var(--purple); font-weight: 600; }
+.timestamp-cell { color: var(--text-dim); font-size: 11px; }
+
+.signal-chip { display: inline-block; background: var(--bg-elevated); border: 1px solid var(--border); padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 1px 2px; }
+.signal-chip .name { color: var(--text-dim); margin-right: 4px; }
+.signal-chip .val { color: var(--green); font-weight: 600; }
+
+.source-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.source-badge.can { background: rgba(188,140,255,0.15); color: var(--purple); }
+.source-badge.sensor { background: rgba(57,210,192,0.15); color: var(--cyan); }
+.source-badge.merged { background: rgba(247,129,102,0.15); color: var(--bit-selected); }
+
+.raw-data-scroll { max-height: 500px; overflow-y: auto; }
+.raw-data-empty { text-align: center; padding: 40px; color: var(--text-dim); }
+.raw-data-stats { display: flex; gap: 16px; padding: 10px 16px; background: var(--bg-elevated); border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); flex-wrap: wrap; }
+.raw-data-stats span { display: flex; align-items: center; gap: 4px; }
+.raw-data-stats .count { color: var(--text-bright); font-weight: 600; }
+
+/* Theme Toggle Button */
+.theme-toggle {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+EOF
+
+# ════════════════════════════════════════════════════════
+#  5. CSS - BIT MATRIX
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/bit-matrix.css" << 'EOF'
+.bit-matrix-container {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.bit-matrix-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bit-matrix-header h3 { font-size: 0.95em; color: var(--text-bright); }
+
+.bit-matrix-actions { display: flex; gap: 6px; }
+
+.bit-row { display: flex; align-items: center; gap: 8px; }
+
+.byte-label {
+  width: 60px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.byte-bits { display: flex; gap: 3px; flex: 1; flex-wrap: wrap; }
+
+.bit {
+  width: 40px; height: 40px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: all 0.1s;
+  border: 2px solid transparent;
+  user-select: none;
+  position: relative;
+}
+
+.bit.off { background: var(--bit-off); color: var(--text-dim); }
+.bit.on { background: var(--bit-on); color: white; box-shadow: 0 0 8px rgba(31,111,235,0.4); }
+.bit.selected { background: var(--bit-selected); color: white; border-color: #ffa657; box-shadow: 0 0 10px rgba(247,129,102,0.5); }
+.bit:hover { transform: scale(1.08); border-color: var(--bit-hover); }
+.bit .bit-index { position: absolute; top: 1px; right: 3px; font-size: 8px; opacity: 0.5; }
+
+.byte-value { width: 60px; color: var(--cyan); font-size: 13px; font-weight: 600; }
+
+.bit-indexes { display: flex; gap: 3px; margin-left: 68px; margin-bottom: 4px; flex-wrap: wrap; }
+.bit-indexes span { width: 40px; text-align: center; font-size: 10px; color: var(--text-dim); font-family: 'Consolas', monospace; }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  6. CSS - ANALYZER
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/analyzer.css" << 'EOF'
+.byte-analyzer-container { display: grid; grid-template-columns: 280px 1fr; gap: 20px; min-height: 600px; }
+
+.byte-analyzer-sidebar {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.byte-analyzer-sidebar-header { padding: 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); }
+.byte-analyzer-sidebar-header h3 { color: var(--text-bright); font-size: 14px; margin-bottom: 8px; }
+.byte-analyzer-sidebar-header input {
+  width: 100%;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px; border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Consolas', monospace;
+}
+
+.can-id-list { max-height: 500px; overflow-y: auto; }
+
+.can-id-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+.can-id-item:hover { background: var(--bg-hover); }
+.can-id-item.active { background: rgba(88, 166, 255, 0.1); border-left: 3px solid var(--accent); }
+.can-id-item .id { color: var(--purple); font-family: 'Consolas', monospace; font-weight: 600; font-size: 14px; }
+.can-id-item .count { color: var(--text-dim); font-size: 11px; background: var(--bg-elevated); padding: 2px 8px; border-radius: 10px; }
+
+.byte-analyzer-main { display: flex; flex-direction: column; gap: 20px; }
+
+.byte-matrix-visual { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+.byte-matrix-visual h3 { color: var(--text-bright); font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.byte-matrix-visual h3 .can-id-display { color: var(--purple); font-family: 'Consolas', monospace; font-size: 18px; }
+
+.byte-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; margin-bottom: 20px; }
+
+.byte-cell {
+  background: var(--bg-elevated);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.byte-cell.increased {
+  background: rgba(63, 185, 80, 0.2);
+  border-color: var(--green);
+  box-shadow: 0 0 12px rgba(63, 185, 80, 0.4);
+}
+
+.byte-cell.decreased {
+  background: rgba(248, 81, 73, 0.2);
+  border-color: var(--red);
+  box-shadow: 0 0 12px rgba(248, 81, 73, 0.4);
+}
+
+.byte-cell .byte-index { font-size: 10px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
+.byte-cell .byte-value { font-family: 'Consolas', monospace; font-size: 24px; font-weight: 700; color: var(--text-bright); margin-bottom: 4px; }
+.byte-cell .byte-decimal { font-family: 'Consolas', monospace; font-size: 12px; color: var(--text-dim); }
+.byte-cell .byte-label {
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: var(--bg-dark);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--cyan);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.byte-cell .byte-label:hover { background: var(--bg-hover); }
+.byte-cell .byte-label.empty { color: var(--text-dim); font-style: italic; }
+.byte-cell .byte-arrow { position: absolute; top: 4px; right: 4px; font-size: 16px; font-weight: bold; }
+.byte-cell.increased .byte-arrow { color: var(--green); }
+.byte-cell.decreased .byte-arrow { color: var(--red); }
+
+.translations-table { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.translations-table-header { padding: 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.translations-table-header h3 { color: var(--text-bright); font-size: 14px; }
+
+.translations-grid { display: grid; grid-template-columns: 80px 1fr 150px 150px; gap: 1px; background: var(--border); }
+.translations-grid > div { background: var(--bg-dark); padding: 10px 12px; }
+.translations-grid .header { background: var(--bg-elevated); font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 600; }
+.translations-grid input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 4px 6px; border-radius: 3px;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+}
+.translations-grid input:focus { outline: none; border-color: var(--accent); background: var(--bg-elevated); }
+.translations-grid select {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 4px 6px; border-radius: 3px;
+  font-size: 12px;
+}
+.translations-grid select:focus { outline: none; border-color: var(--accent); background: var(--bg-elevated); }
+
+.frames-history { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.frames-history-header { padding: 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); }
+.frames-history-header h3 { color: var(--text-bright); font-size: 14px; }
+
+.frames-history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.frames-history-table thead { background: var(--bg-elevated); position: sticky; top: 0; z-index: 1; }
+.frames-history-table th { padding: 10px 12px; text-align: left; color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.frames-history-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; }
+.frames-history-table tbody tr:hover { background: var(--bg-hover); }
+.frames-history-scroll { max-height: 300px; overflow-y: auto; }
+
+.byte-history-cell { display: inline-block; padding: 2px 6px; border-radius: 3px; margin: 0 1px; transition: all 0.3s; }
+.byte-history-cell.up { background: rgba(63, 185, 80, 0.2); color: var(--green); }
+.byte-history-cell.down { background: rgba(248, 81, 73, 0.2); color: var(--red); }
+.byte-history-cell.same { color: var(--text-dim); }
+
+.analyzer-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.analyzer-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+.analyzer-controls input[type="number"] { width: 80px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  7. CSS - SNIFFER
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/sniffer.css" << 'EOF'
+.sniffer-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sniffer-table thead { background: var(--bg-elevated); position: sticky; top: 0; z-index: 1; }
+.sniffer-table th {
+  padding: 10px 12px; text-align: left;
+  color: var(--text-dim); font-weight: 600;
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+.sniffer-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; color: var(--text); vertical-align: middle; }
+.sniffer-table tbody tr { transition: background 0.1s; }
+.sniffer-table tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
+.sniffer-table tbody tr.selected { background: rgba(88, 166, 255, 0.1); }
+
+.byte-cell-small {
+  display: inline-block;
+  min-width: 32px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin: 0 2px;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.byte-cell-small.increased {
+  background: rgba(63, 185, 80, 0.35);
+  color: var(--green);
+  box-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
+  font-weight: 700;
+}
+
+.byte-cell-small.decreased {
+  background: rgba(248, 81, 73, 0.35);
+  color: var(--red);
+  box-shadow: 0 0 8px rgba(248, 81, 73, 0.5);
+  font-weight: 700;
+}
+
+.byte-cell-small.same {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.byte-cell-small.neutral {
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+}
+
+.freq-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  color: var(--cyan);
+  font-family: 'Consolas', monospace;
+}
+
+.frame-count {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.sniffer-scroll { max-height: 600px; overflow-y: auto; }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  8. CSS - RESPONSIVO
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/css/responsive.css" << 'EOF'
+@media (max-width: 1200px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .byte-analyzer-container { grid-template-columns: 1fr; }
+  .frame-input-row { grid-template-columns: 1fr; }
+  .signal-form { grid-template-columns: 1fr; }
+  .translations-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  body { padding: 10px; }
+  header { padding: 16px; }
+  header h1 { font-size: 1.2em; }
+  .header-config input { width: 100%; }
+  .bit { width: 32px; height: 32px; font-size: 11px; }
+  .bit-indexes span { width: 32px; }
+  .byte-grid { grid-template-columns: repeat(4, 1fr); }
+  .byte-cell .byte-value { font-size: 18px; }
+  .panel-body { padding: 12px; }
+  .sniffer-table { font-size: 10px; }
+  .sniffer-table td, .sniffer-table th { padding: 4px 6px; }
+  .byte-cell-small { min-width: 24px; padding: 2px 4px; font-size: 10px; }
+}
+
+@media (max-width: 480px) {
+  .byte-grid { grid-template-columns: repeat(2, 1fr); }
+  .tab { padding: 10px 12px; font-size: 11px; }
+  .btn { padding: 8px 12px; font-size: 12px; }
+}
+EOF
+
+# ════════════════════════════════════════════════════════
+#  9. HTML PRINCIPAL
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/index.html" << 'EOF'
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CAN Signal Decoder Studio</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  :root {
-    --bg-dark: #0d1117;
-    --bg-panel: #161b22;
-    --bg-elevated: #1c2128;
-    --bg-hover: #2d333b;
-    --border: #30363d;
-    --border-bright: #484f58;
-    --text: #c9d1d9;
-    --text-dim: #8b949e;
-    --text-bright: #f0f6fc;
-    --accent: #58a6ff;
-    --green: #3fb950;
-    --green-dim: #238636;
-    --red: #f85149;
-    --orange: #d29922;
-    --purple: #bc8cff;
-    --cyan: #39d2c0;
-    --bit-off: #21262d;
-    --bit-on: #1f6feb;
-    --bit-selected: #f78166;
-    --bit-hover: #388bfd;
-  }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--bg-dark);
-    color: var(--text);
-    min-height: 100vh;
-    padding: 20px;
-    font-size: 14px;
-  }
-
-  .container { max-width: 1800px; margin: 0 auto; }
-
-  header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 20px 24px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    margin-bottom: 20px;
-  }
-
-  header h1 {
-    font-size: 1.6em; color: var(--text-bright);
-    display: flex; align-items: center; gap: 12px;
-  }
-
-  header h1 .logo {
-    background: linear-gradient(135deg, var(--accent), var(--purple));
-    width: 40px; height: 40px;
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.3em;
-  }
-
-  .header-config { display: flex; gap: 10px; align-items: center; }
-
-  .header-config input {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-family: 'Consolas', monospace;
-    width: 260px;
-  }
-
-  .header-config input:focus { outline: none; border-color: var(--accent); }
-
-  .main-grid {
-    display: grid;
-    grid-template-columns: 1fr 380px;
-    gap: 20px;
-    margin-bottom: 20px;
-  }
-
-  .panel {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .panel-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center;
-    background: var(--bg-elevated);
-  }
-
-  .panel-header h2 {
-    font-size: 1.1em; color: var(--text-bright);
-    display: flex; align-items: center; gap: 10px;
-  }
-
-  .panel-body { padding: 20px; }
-
-  .frame-input-row {
-    display: grid;
-    grid-template-columns: 180px 1fr 100px;
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-
-  .input-group label {
-    display: block;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-dim);
-    margin-bottom: 6px;
-    font-weight: 600;
-  }
-
-  .input-group input, .input-group select {
-    width: 100%;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    color: var(--text-bright);
-    padding: 10px 12px;
-    border-radius: 6px;
-    font-family: 'Consolas', monospace;
-    font-size: 14px;
-  }
-
-  .input-group input:focus, .input-group select:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
-  }
-
-  .bit-matrix-container {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 20px;
-  }
-
-  .bit-matrix-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 12px;
-  }
-
-  .bit-matrix-header h3 { font-size: 0.95em; color: var(--text-bright); }
-
-  .bit-matrix-actions { display: flex; gap: 6px; }
-
-  .btn-mini {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .btn-mini:hover {
-    background: var(--bg-hover);
-    color: var(--text-bright);
-    border-color: var(--border-bright);
-  }
-
-  .bit-row { display: flex; align-items: center; gap: 8px; }
-
-  .byte-label {
-    width: 60px;
-    color: var(--text-dim);
-    font-size: 11px;
-    font-weight: 600;
-    text-align: right;
-  }
-
-  .byte-bits { display: flex; gap: 3px; flex: 1; }
-
-  .bit {
-    width: 40px; height: 40px;
-    border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 600;
-    cursor: pointer;
-    transition: all 0.1s;
-    border: 2px solid transparent;
-    user-select: none;
-    position: relative;
-  }
-
-  .bit.off { background: var(--bit-off); color: var(--text-dim); }
-  .bit.on { background: var(--bit-on); color: white; box-shadow: 0 0 8px rgba(31,111,235,0.4); }
-  .bit.selected { background: var(--bit-selected); color: white; border-color: #ffa657; box-shadow: 0 0 10px rgba(247,129,102,0.5); }
-  .bit:hover { transform: scale(1.08); border-color: var(--bit-hover); }
-  .bit .bit-index { position: absolute; top: 1px; right: 3px; font-size: 8px; opacity: 0.5; }
-
-  .byte-value { width: 60px; color: var(--cyan); font-size: 13px; font-weight: 600; }
-
-  .bit-indexes { display: flex; gap: 3px; margin-left: 68px; margin-bottom: 4px; }
-  .bit-indexes span { width: 40px; text-align: center; font-size: 10px; color: var(--text-dim); font-family: 'Consolas', monospace; }
-
-  .signal-editor {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 20px;
-  }
-
-  .signal-editor h3 {
-    font-size: 0.95em; color: var(--text-bright);
-    margin-bottom: 14px;
-    display: flex; align-items: center; gap: 8px;
-  }
-
-  .signal-editor h3 .badge {
-    background: var(--bit-selected);
-    color: white;
-    padding: 2px 8px; border-radius: 10px;
-    font-size: 11px; font-weight: 600;
-  }
-
-  .editing-indicator {
-    background: var(--orange);
-    color: white;
-    padding: 2px 8px; border-radius: 10px;
-    font-size: 11px; font-weight: 600;
-    margin-left: auto;
-  }
-
-  .signal-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .signal-form .full-width { grid-column: 1 / -1; }
-
-  .signal-form input, .signal-form select {
-    width: 100%;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    color: var(--text-bright);
-    padding: 8px 10px; border-radius: 6px;
-    font-family: 'Consolas', monospace;
-    font-size: 13px;
-  }
-
-  .signal-form input:focus, .signal-form select:focus { outline: none; border-color: var(--accent); }
-
-  .checkbox-row { display: flex; gap: 16px; align-items: center; padding: 8px 0; }
-  .checkbox-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text); font-size: 13px; }
-  .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
-
-  .preview-box {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    margin-top: 14px;
-  }
-
-  .preview-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 0;
-    border-bottom: 1px dashed var(--border);
-  }
-
-  .preview-row:last-child { border-bottom: none; }
-
-  .preview-label { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-
-  .preview-value { color: var(--green); font-family: 'Consolas', monospace; font-size: 15px; font-weight: 600; }
-  .preview-value.big { font-size: 22px; color: var(--cyan); }
-
-  .btn {
-    padding: 10px 18px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 13px; font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--bg-elevated);
-    color: var(--text);
-  }
-
-  .btn:hover { background: var(--bg-hover); border-color: var(--border-bright); }
-  .btn-primary { background: var(--green-dim); color: white; border-color: var(--green); }
-  .btn-primary:hover { background: var(--green); }
-  .btn-accent { background: #1f6feb; color: white; border-color: var(--accent); }
-  .btn-accent:hover { background: var(--accent); }
-  .btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
-  .btn-danger:hover { background: var(--red); color: white; }
-
-  .action-bar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-
-  .rules-list { display: flex; flex-direction: column; gap: 10px; max-height: 600px; overflow-y: auto; }
-
-  .rule-card {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .rule-card:hover { border-color: var(--accent); transform: translateX(2px); }
-  .rule-card.active { border-color: var(--bit-selected); background: rgba(247,129,102,0.05); box-shadow: 0 0 0 2px rgba(247,129,102,0.2); }
-
-  .rule-card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; }
-  .rule-name { color: var(--text-bright); font-weight: 600; font-size: 14px; }
-  .rule-canid { background: var(--bg-dark); color: var(--purple); padding: 2px 8px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 11px; }
-  .rule-meta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
-  .rule-meta span { background: var(--bg-dark); padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; }
-  .rule-value { color: var(--green); font-family: 'Consolas', monospace; font-weight: 600; font-size: 16px; }
-  .rule-actions { display: flex; gap: 6px; margin-top: 8px; }
-  .rule-actions button { padding: 4px 8px; font-size: 11px; }
-
-  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-dim); }
-  .empty-state .icon { font-size: 3em; margin-bottom: 10px; opacity: 0.3; }
-
-  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-elevated); overflow-x: auto; }
-  .tab { padding: 12px 20px; cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: 13px; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
-
-  .simple-form textarea {
-    width: 100%; min-height: 140px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    color: var(--text-bright);
-    padding: 12px; border-radius: 6px;
-    font-family: 'Consolas', monospace;
-    font-size: 13px;
-    resize: vertical; margin-bottom: 12px;
-  }
-
-  .simple-form textarea:focus { outline: none; border-color: var(--accent); }
-
-  .response-box {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 12px;
-    max-height: 300px;
-    overflow-y: auto;
-    margin-top: 12px;
-  }
-
-  .response-box pre { font-family: 'Consolas', monospace; font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
-  .response-box.success { border-color: var(--green); }
-  .response-box.error { border-color: var(--red); }
-
-  .toast {
-    position: fixed; bottom: 20px; right: 20px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--green);
-    padding: 12px 20px; border-radius: 6px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    z-index: 1000;
-    transform: translateX(400px);
-    transition: transform 0.3s;
-  }
-
-  .toast.show { transform: translateX(0); }
-  .toast.error { border-left-color: var(--red); }
-
-  /* ═══════════════════════════════════════════════════════ */
-  /*  RAW DATA TABLE                                        */
-  /* ════════════════════════════════════════════════════════ */
-  .raw-data-container {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-    margin-top: 12px;
-  }
-
-  .raw-data-toolbar {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 16px;
-    background: var(--bg-elevated);
-    border-bottom: 1px solid var(--border);
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .raw-data-toolbar .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .raw-data-toolbar select, .raw-data-toolbar input {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 6px 10px; border-radius: 4px;
-    font-size: 12px;
-    font-family: 'Consolas', monospace;
-  }
-
-  .raw-data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .raw-data-table thead { background: var(--bg-elevated); position: sticky; top: 0; z-index: 1; }
-  .raw-data-table th {
-    padding: 10px 12px; text-align: left;
-    color: var(--text-dim); font-weight: 600;
-    font-size: 11px; text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--border);
-  }
-  .raw-data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; color: var(--text); vertical-align: top; }
-  .raw-data-table tbody tr { transition: background 0.1s; }
-  .raw-data-table tbody tr:hover { background: var(--bg-hover); }
-
-  .hex-data { color: var(--cyan); font-weight: 600; letter-spacing: 1px; }
-  .can-id-cell { color: var(--purple); font-weight: 600; }
-  .timestamp-cell { color: var(--text-dim); font-size: 11px; }
-
-  .signal-chip { display: inline-block; background: var(--bg-elevated); border: 1px solid var(--border); padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 1px 2px; }
-  .signal-chip .name { color: var(--text-dim); margin-right: 4px; }
-  .signal-chip .val { color: var(--green); font-weight: 600; }
-
-  .source-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-  .source-badge.can { background: rgba(188,140,255,0.15); color: var(--purple); }
-  .source-badge.sensor { background: rgba(57,210,192,0.15); color: var(--cyan); }
-  .source-badge.merged { background: rgba(247,129,102,0.15); color: var(--bit-selected); }
-
-  .raw-data-scroll { max-height: 500px; overflow-y: auto; }
-  .raw-data-empty { text-align: center; padding: 40px; color: var(--text-dim); }
-  .raw-data-stats { display: flex; gap: 16px; padding: 10px 16px; background: var(--bg-elevated); border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); }
-  .raw-data-stats span { display: flex; align-items: center; gap: 4px; }
-  .raw-data-stats .count { color: var(--text-bright); font-weight: 600; }
-
-  .detail-modal-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 2000;
-    display: flex; align-items: center; justify-content: center;
-  }
-
-  .detail-modal {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    width: 90%; max-width: 700px;
-    max-height: 80vh;
-    overflow-y: auto;
-    padding: 24px;
-  }
-
-  .detail-modal h3 { color: var(--text-bright); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-  .detail-modal pre {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 16px;
-    font-family: 'Consolas', monospace;
-    font-size: 12px;
-    color: var(--green);
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  /* ════════════════════════════════════════════════════════ */
-  /*  BYTE ANALYZER                                         */
-  /* ════════════════════════════════════════════════════════ */
-  .byte-analyzer-container { display: grid; grid-template-columns: 280px 1fr; gap: 20px; min-height: 600px; }
-
-  .byte-analyzer-sidebar {
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-
-  .byte-analyzer-sidebar-header { padding: 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); }
-  .byte-analyzer-sidebar-header h3 { color: var(--text-bright); font-size: 14px; margin-bottom: 8px; }
-  .byte-analyzer-sidebar-header input {
-    width: 100%;
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 6px 10px; border-radius: 4px;
-    font-size: 12px;
-    font-family: 'Consolas', monospace;
-  }
-
-  .can-id-list { max-height: 500px; overflow-y: auto; }
-
-  .can-id-item {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.15s;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-
-  .can-id-item:hover { background: var(--bg-hover); }
-  .can-id-item.active { background: rgba(88, 166, 255, 0.1); border-left: 3px solid var(--accent); }
-  .can-id-item .id { color: var(--purple); font-family: 'Consolas', monospace; font-weight: 600; font-size: 14px; }
-  .can-id-item .count { color: var(--text-dim); font-size: 11px; background: var(--bg-elevated); padding: 2px 8px; border-radius: 10px; }
-
-  .byte-analyzer-main { display: flex; flex-direction: column; gap: 20px; }
-
-  .byte-matrix-visual { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
-  .byte-matrix-visual h3 { color: var(--text-bright); font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
-  .byte-matrix-visual h3 .can-id-display { color: var(--purple); font-family: 'Consolas', monospace; font-size: 18px; }
-
-  .byte-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; margin-bottom: 20px; }
-
-  .byte-cell {
-    background: var(--bg-elevated);
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    padding: 16px 12px;
-    text-align: center;
-    transition: all 0.3s;
-    position: relative;
-  }
-
-  .byte-cell.increased {
-    background: rgba(63, 185, 80, 0.2);
-    border-color: var(--green);
-    box-shadow: 0 0 12px rgba(63, 185, 80, 0.4);
-  }
-
-  .byte-cell.decreased {
-    background: rgba(248, 81, 73, 0.2);
-    border-color: var(--red);
-    box-shadow: 0 0 12px rgba(248, 81, 73, 0.4);
-  }
-
-  .byte-cell .byte-index { font-size: 10px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
-  .byte-cell .byte-value { font-family: 'Consolas', monospace; font-size: 24px; font-weight: 700; color: var(--text-bright); margin-bottom: 4px; }
-  .byte-cell .byte-decimal { font-family: 'Consolas', monospace; font-size: 12px; color: var(--text-dim); }
-  .byte-cell .byte-label {
-    margin-top: 8px;
-    padding: 4px 8px;
-    background: var(--bg-dark);
-    border-radius: 4px;
-    font-size: 11px;
-    color: var(--cyan);
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .byte-cell .byte-label:hover { background: var(--bg-hover); }
-  .byte-cell .byte-label.empty { color: var(--text-dim); font-style: italic; }
-  .byte-cell .byte-arrow { position: absolute; top: 4px; right: 4px; font-size: 16px; font-weight: bold; }
-  .byte-cell.increased .byte-arrow { color: var(--green); }
-  .byte-cell.decreased .byte-arrow { color: var(--red); }
-
-  .translations-table { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .translations-table-header { padding: 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-  .translations-table-header h3 { color: var(--text-bright); font-size: 14px; }
-
-  .translations-grid { display: grid; grid-template-columns: 80px 1fr 150px 150px; gap: 1px; background: var(--border); }
-  .translations-grid > div { background: var(--bg-dark); padding: 10px 12px; }
-  .translations-grid .header { background: var(--bg-elevated); font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 600; }
-  .translations-grid input {
-    width: 100%;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text);
-    padding: 4px 6px; border-radius: 3px;
-    font-family: 'Consolas', monospace;
-    font-size: 12px;
-  }
-  .translations-grid input:focus { outline: none; border-color: var(--accent); background: var(--bg-elevated); }
-  .translations-grid select {
-    width: 100%;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text);
-    padding: 4px 6px; border-radius: 3px;
-    font-size: 12px;
-  }
-  .translations-grid select:focus { outline: none; border-color: var(--accent); background: var(--bg-elevated); }
-
-  .frames-history { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .frames-history-header { padding: 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); }
-  .frames-history-header h3 { color: var(--text-bright); font-size: 14px; }
-
-  .frames-history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .frames-history-table thead { background: var(--bg-elevated); position: sticky; top: 0; z-index: 1; }
-  .frames-history-table th { padding: 10px 12px; text-align: left; color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-  .frames-history-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; }
-  .frames-history-table tbody tr:hover { background: var(--bg-hover); }
-  .frames-history-scroll { max-height: 300px; overflow-y: auto; }
-
-  .byte-history-cell { display: inline-block; padding: 2px 6px; border-radius: 3px; margin: 0 1px; transition: all 0.3s; }
-  .byte-history-cell.up { background: rgba(63, 185, 80, 0.2); color: var(--green); }
-  .byte-history-cell.down { background: rgba(248, 81, 73, 0.2); color: var(--red); }
-  .byte-history-cell.same { color: var(--text-dim); }
-
-  .analyzer-controls { display: flex; gap: 10px; align-items: center; }
-  .analyzer-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
-  .analyzer-controls input[type="number"] { width: 80px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-
-  /* ════════════════════════════════════════════════════════ */
-  /*  SNIFFER TABLE (todos os CAN IDs)                      */
-  /* ════════════════════════════════════════════════════════ */
-  .sniffer-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .sniffer-table thead { background: var(--bg-elevated); position: sticky; top: 0; z-index: 1; }
-  .sniffer-table th {
-    padding: 10px 12px; text-align: left;
-    color: var(--text-dim); font-weight: 600;
-    font-size: 11px; text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--border);
-  }
-  .sniffer-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: 'Consolas', monospace; color: var(--text); vertical-align: middle; }
-  .sniffer-table tbody tr { transition: background 0.1s; }
-  .sniffer-table tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
-  .sniffer-table tbody tr.selected { background: rgba(88, 166, 255, 0.1); }
-
-  .byte-cell-small {
-    display: inline-block;
-    min-width: 32px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    margin: 0 2px;
-    font-family: 'Consolas', monospace;
-    font-size: 12px;
-    font-weight: 600;
-    text-align: center;
-    transition: all 0.3s;
-  }
-
-  .byte-cell-small.increased {
-    background: rgba(63, 185, 80, 0.35);
-    color: var(--green);
-    box-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
-    font-weight: 700;
-  }
-
-  .byte-cell-small.decreased {
-    background: rgba(248, 81, 73, 0.35);
-    color: var(--red);
-    box-shadow: 0 0 8px rgba(248, 81, 73, 0.5);
-    font-weight: 700;
-  }
-
-  .byte-cell-small.same {
-    background: var(--bg-elevated);
-    color: var(--text);
-  }
-
-  .byte-cell-small.neutral {
-    background: var(--bg-elevated);
-    color: var(--text-dim);
-  }
-
-  .freq-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-    background: var(--bg-elevated);
-    color: var(--cyan);
-    font-family: 'Consolas', monospace;
-  }
-
-  .frame-count {
-    color: var(--text-dim);
-    font-size: 11px;
-  }
-
-  .sniffer-scroll { max-height: 600px; overflow-y: auto; }
-
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: var(--bg-dark); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
-
-  @media (max-width: 1100px) {
-    .main-grid { grid-template-columns: 1fr; }
-    .bit { width: 32px; height: 32px; font-size: 11px; }
-    .bit-indexes span { width: 32px; }
-    .byte-analyzer-container { grid-template-columns: 1fr; }
-  }
-</style>
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/bit-matrix.css">
+<link rel="stylesheet" href="css/analyzer.css">
+<link rel="stylesheet" href="css/sniffer.css">
+<link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
 <div class="container">
 
   <header>
     <h1>
-      <span class="logo">🔧</span>
+      <span class="logo"></span>
       CAN Signal Decoder Studio
     </h1>
     <div class="header-config">
       <input type="text" id="baseUrl" value="http://localhost:3001/api" placeholder="API URL">
       <button class="btn btn-accent" onclick="checkHealth()">❤️ Health</button>
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">🌙</button>
     </div>
   </header>
 
@@ -837,13 +962,12 @@
   <div class="panel">
     <div class="tabs">
       <div class="tab active" onclick="switchTab(event,'rawdata')">📊 Dados Brutos</div>
-      <div class="tab" onclick="switchTab(event,'analyzer')"> Byte Analyzer</div>
-      <div class="tab" onclick="switchTab(event,'sensors')">🌡️ Sensores</div>
+      <div class="tab" onclick="switchTab(event,'analyzer')">🔬 Byte Analyzer</div>
+      <div class="tab" onclick="switchTab(event,'sensors')">️ Sensores</div>
       <div class="tab" onclick="switchTab(event,'unified')">🔗 Unified</div>
       <div class="tab" onclick="switchTab(event,'log')">📜 Log</div>
     </div>
 
-    <!-- ═══ DADOS BRUTOS ═══ -->
     <div class="tab-content active" id="tab-rawdata">
       <div class="panel-body">
         <div class="raw-data-container">
@@ -895,13 +1019,9 @@
       </div>
     </div>
 
-    <!-- ═══ BYTE ANALYZER ═══ -->
     <div class="tab-content" id="tab-analyzer">
       <div class="panel-body">
 
-        <!-- ════════════════════════════════════════════════════════ -->
-        <!--  TABELA SNIFFER — TODOS OS CAN IDs                     -->
-        <!-- ════════════════════════════════════════════════════════ -->
         <div class="raw-data-container" style="margin-bottom:20px;">
           <div class="raw-data-toolbar">
             <div style="display:flex; align-items:center; gap:12px;">
@@ -909,7 +1029,7 @@
               <span style="color:var(--text-dim); font-size:11px;">(clique em uma linha para analisar)</span>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-              <input type="text" id="snifferFilter" placeholder=" Filtrar ID..." oninput="renderSnifferTable()" style="width:150px;">
+              <input type="text" id="snifferFilter" placeholder="🔍 Filtrar ID..." oninput="renderSnifferTable()" style="width:150px;">
               <button class="btn-mini" onclick="refreshAnalyzer()">🔄 Atualizar</button>
             </div>
           </div>
@@ -937,9 +1057,6 @@
           </div>
         </div>
 
-        <!-- ════════════════════════════════════════════════════════ -->
-        <!--  ANÁLISE DETALHADA DO ID SELECIONADO                   -->
-        <!-- ════════════════════════════════════════════════════════ -->
         <div class="byte-analyzer-container">
 
           <div class="byte-analyzer-sidebar">
@@ -949,7 +1066,7 @@
             </div>
             <div class="can-id-list" id="canIdList">
               <div class="empty-state">
-                <div class="icon">📡</div>
+                <div class="icon"></div>
                 <div>Nenhum CAN ID</div>
                 <div style="font-size:11px; margin-top:6px;">Envie frames para ver aqui</div>
               </div>
@@ -980,7 +1097,7 @@
               </h3>
               <div class="byte-grid" id="byteGrid">
                 <div class="empty-state" style="grid-column: 1 / -1;">
-                  <div class="icon">🔍</div>
+                  <div class="icon"></div>
                   <div>Selecione um CAN ID na tabela acima</div>
                 </div>
               </div>
@@ -1001,7 +1118,7 @@
 
             <div class="frames-history">
               <div class="frames-history-header">
-                <h3> Histórico de Frames (últimos 20)</h3>
+                <h3>📜 Histórico de Frames (últimos 20)</h3>
               </div>
               <div class="frames-history-scroll">
                 <table class="frames-history-table">
@@ -1025,7 +1142,6 @@
       </div>
     </div>
 
-    <!-- ═══ SENSORS ═══ -->
     <div class="tab-content" id="tab-sensors">
       <div class="panel-body">
         <div class="simple-form">
@@ -1043,7 +1159,6 @@
       </div>
     </div>
 
-    <!-- ═══ UNIFIED ═══ -->
     <div class="tab-content" id="tab-unified">
       <div class="panel-body">
         <div class="simple-form">
@@ -1067,16 +1182,15 @@
             </div>
           </div>
           <div class="action-bar">
-            <button class="btn btn-accent" onclick="mergeUnified()"> Merge</button>
+            <button class="btn btn-accent" onclick="mergeUnified()">🔀 Merge</button>
             <button class="btn btn-primary" onclick="listUnified()">📥 Listar</button>
-            <button class="btn btn-danger" onclick="clearUnified()">🗑️ Limpar</button>
+            <button class="btn btn-danger" onclick="clearUnified()">️ Limpar</button>
           </div>
           <div class="response-box" id="unifiedResponse"><pre>Aguardando...</pre></div>
         </div>
       </div>
     </div>
 
-    <!-- ═══ LOG ═══ -->
     <div class="tab-content" id="tab-log">
       <div class="panel-body">
         <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
@@ -1093,10 +1207,25 @@
 <div class="toast" id="toast"></div>
 <div id="modalContainer"></div>
 
-<script>
-// ════════════════════════════════════════════════════════
-//  STATE
-// ════════════════════════════════════════════════════════
+<script src="js/state.js"></script>
+<script src="js/api.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/bit-matrix.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/raw-data.js"></script>
+<script src="js/analyzer.js"></script>
+<script src="js/sensors.js"></script>
+<script src="js/unified.js"></script>
+<script src="js/log.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
+EOF
+
+# ════════════════════════════════════════════════════════
+#  10. JAVASCRIPT - STATE
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/state.js" << 'EOF'
 const state = {
   bytes: new Array(8).fill(0),
   selectedBits: new Set(),
@@ -1112,13 +1241,63 @@ const state = {
     framesByCanId: {},
     frequencies: {},
     lastBytes: {},
-    translations: {}
+    translations: {},
+    refreshTimer: null
   }
 };
+EOF
 
-// ════════════════════════════════════════════════════════
-//  BIT MATRIX
-// ════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════
+#  11. JAVASCRIPT - API
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/api.js" << 'EOF'
+function getBaseUrl() { return document.getElementById('baseUrl').value.trim(); }
+
+async function apiRequest(method, endpoint, body = null) {
+  const url = `${getBaseUrl()}${endpoint}`;
+  const start = Date.now();
+  try {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body && method !== 'GET') opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    const data = await res.json();
+    logRequest(method, endpoint, body, data, res.status, Date.now() - start);
+    return { success: res.ok, data, status: res.status };
+  } catch (err) {
+    logRequest(method, endpoint, body, { error: err.message }, 0, Date.now() - start);
+    return { success: false, data: { error: err.message }, status: 0 };
+  }
+}
+EOF
+
+# ════════════════════════════════════════════════════════
+#  12. JAVASCRIPT - THEME
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/theme.js" << 'EOF'
+function initTheme() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeButton(saved);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateThemeButton(next);
+}
+
+function updateThemeButton(theme) {
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+EOF
+
+# ════════════════════════════════════════════════════════
+#  13. JAVASCRIPT - BIT MATRIX
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/bit-matrix.js" << 'EOF'
 function renderBitMatrix() {
   const c = document.getElementById('bitMatrix');
   let h = '<div class="bit-indexes">';
@@ -1245,10 +1424,12 @@ function updatePreview() {
   document.getElementById('previewPhysical').textContent = `${phys.toFixed(4)} ${u}`.trim();
   renderRulesList();
 }
+EOF
 
-// ════════════════════════════════════════════════════════
-//  RULES
-// ════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════
+#  14. JAVASCRIPT - RULES
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/rules.js" << 'EOF'
 function saveRule() {
   if (state.selectedBits.size === 0) { showToast('Selecione pelo menos 1 bit!', true); return; }
   const sn = document.getElementById('signalName').value.trim();
@@ -1291,7 +1472,7 @@ function loadRule(rid) {
   document.getElementById('maxValue').value = rule.maxValue || '';
   state.selectedBits.clear();
   for (let i = rule.startBit; i < rule.startBit + rule.bitLength; i++) state.selectedBits.add(i);
-  updateFromInputs(); updateSelectionInputs(); updateEditingIndicator(); renderRulesList();
+  updateSelectionInputs(); updateEditingIndicator(); renderRulesList();
   showToast(`📝 Editando "${rule.signalName}"`);
 }
 
@@ -1338,7 +1519,7 @@ function updateEditingIndicator() {
 function renderRulesList() {
   const c = document.getElementById('rulesList');
   if (!state.rules.length) {
-    c.innerHTML = '<div class="empty-state"><div class="icon">📋</div><div>Nenhuma regra</div></div>';
+    c.innerHTML = '<div class="empty-state"><div class="icon"></div><div>Nenhuma regra</div></div>';
     return;
   }
   c.innerHTML = state.rules.map(rule => {
@@ -1393,9 +1574,19 @@ async function loadRulesFromApi() {
   } catch (e) { showToast('❌ ' + e.message, true); }
 }
 
-// ════════════════════════════════════════════════════════
-//  RAW DATA
-// ════════════════════════════════════════════════════════
+async function syncRulesToApi() {
+  if (!state.rules.length) { showToast('Nenhuma regra!', true); return; }
+  const p = state.rules.map(r => ({ canId:r.canId, signalName:r.signalName, startBit:r.startBit, bitLength:r.bitLength, byteOrder:r.byteOrder, signed:r.signed, factor:r.factor, offset:r.offset, unit:r.unit }));
+  const r = await apiRequest('POST', '/decoding/rules', p);
+  if (r.success) showToast(`✅ ${state.rules.length} regras sincronizadas!`);
+  else showToast('Erro: ' + (r.data.error||''), true);
+}
+EOF
+
+# ════════════════════════════════════════════════════════
+#  15. JAVASCRIPT - RAW DATA
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/raw-data.js" << 'EOF'
 async function refreshRawData() {
   try {
     showToast('🔄 Carregando dados...');
@@ -1532,7 +1723,7 @@ function showDetail(id) {
   document.getElementById('modalContainer').innerHTML = `
     <div class="detail-modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="detail-modal">
-        <h3>🔍 Detalhes <button class="btn-mini" onclick="closeModal()">✕ Fechar</button></h3>
+        <h3> Detalhes <button class="btn-mini" onclick="closeModal()">✕ Fechar</button></h3>
         <div style="margin-bottom:12px;">
           <span class="source-badge ${r.source}" style="font-size:12px;">${r.source}</span>
           ${r.canId !== '—' ? `<span class="can-id-cell" style="margin-left:10px;">${r.canId}</span>` : ''}
@@ -1555,10 +1746,12 @@ function exportRawData() {
   a.click();
   showToast(`💾 ${state.rawData.length} registros exportados`);
 }
+EOF
 
-// ════════════════════════════════════════════════════════
-//  BYTE ANALYZER — SNIFFER DE TODOS OS IDs
-// ════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════
+#  16. JAVASCRIPT - ANALYZER
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/analyzer.js" << 'EOF'
 function hexToBytes(hex) {
   const bytes = new Array(8).fill(0);
   const clean = hex.replace(/[^0-9a-fA-F]/g, '');
@@ -1577,7 +1770,6 @@ async function refreshAnalyzer() {
     const frames = res.data.data || res.data || [];
     if (!Array.isArray(frames)) return;
 
-    // Agrupa por CAN ID
     const byCanId = {};
     const timestampsByCanId = {};
 
@@ -1588,7 +1780,6 @@ async function refreshAnalyzer() {
       timestampsByCanId[f.canId].push(f.timestamp);
     });
 
-    // Calcula frequência
     const frequencies = {};
     Object.keys(timestampsByCanId).forEach(canId => {
       const ts = timestampsByCanId[canId].sort((a, b) => a - b);
@@ -1606,7 +1797,6 @@ async function refreshAnalyzer() {
     state.analyzer.frequencies = frequencies;
     state.analyzer.canIds = Object.keys(byCanId).sort();
 
-    // Renderiza tudo
     renderSnifferTable();
     renderCanIdList();
 
@@ -1620,9 +1810,6 @@ async function refreshAnalyzer() {
   }
 }
 
-// ════════════════════════════════════════════════════════
-//  SNIFFER TABLE — TODOS OS CAN IDs COM BYTES COLORIDOS
-// ════════════════════════════════════════════════════════
 function renderSnifferTable() {
   const body = document.getElementById('snifferBody');
   const filter = (document.getElementById('snifferFilter')?.value || '').toLowerCase();
@@ -1673,7 +1860,7 @@ function renderCanIdList() {
   if (search) ids = ids.filter(id => id.toLowerCase().includes(search));
 
   if (!ids.length) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">📡</div><div>Nenhum CAN ID</div></div>';
+    container.innerHTML = '<div class="empty-state"><div class="icon"></div><div>Nenhum CAN ID</div></div>';
     return;
   }
 
@@ -1703,7 +1890,7 @@ function renderByteGrid() {
   const canId = state.analyzer.selectedCanId;
 
   if (!canId || !state.analyzer.framesByCanId[canId]) {
-    container.innerHTML = '<div class="empty-state" style="grid-column: 1 / -1;"><div class="icon">🔍</div><div>Selecione um CAN ID</div></div>';
+    container.innerHTML = '<div class="empty-state" style="grid-column: 1 / -1;"><div class="icon"></div><div>Selecione um CAN ID</div></div>';
     return;
   }
 
@@ -1828,7 +2015,7 @@ function exportTranslations() {
   a.href = URL.createObjectURL(blob);
   a.download = `translations-${canId}-${Date.now()}.json`;
   a.click();
-  showToast(' Traduções exportadas');
+  showToast('💾 Traduções exportadas');
 }
 
 function renderFramesHistory() {
@@ -1882,28 +2069,52 @@ function stopAutoRefresh() {
     state.analyzer.refreshTimer = null;
   }
 }
+EOF
 
-// ════════════════════════════════════════════════════════
-//  API COMMUNICATION
-// ════════════════════════════════════════════════════════
-function getBaseUrl() { return document.getElementById('baseUrl').value.trim(); }
-
-async function apiRequest(method, endpoint, body = null) {
-  const url = `${getBaseUrl()}${endpoint}`;
-  const start = Date.now();
+# ════════════════════════════════════════════════════════
+#  17. JAVASCRIPT - SENSORS
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/sensors.js" << 'EOF'
+async function sendSensors() {
   try {
-    const opts = { method, headers: { 'Content-Type': 'application/json' } };
-    if (body && method !== 'GET') opts.body = JSON.stringify(body);
-    const res = await fetch(url, opts);
-    const data = await res.json();
-    logRequest(method, endpoint, body, data, res.status, Date.now() - start);
-    return { success: res.ok, data, status: res.status };
-  } catch (err) {
-    logRequest(method, endpoint, body, { error: err.message }, 0, Date.now() - start);
-    return { success: false, data: { error: err.message }, status: 0 };
-  }
+    const p = JSON.parse(document.getElementById('sensorPayload').value);
+    const r = await apiRequest('POST', '/sensors', p);
+    showResponse('sensorResponse', r.data, r.success);
+    if (r.success) { showToast('✅ Sensores!'); refreshRawData(); }
+  } catch (e) { showResponse('sensorResponse', { error: 'JSON inválido: ' + e.message }, false); }
 }
 
+async function listSensors() { const r = await apiRequest('GET', '/sensors'); showResponse('sensorResponse', r.data, r.success); }
+async function clearSensors() { const r = await apiRequest('DELETE', '/sensors'); showResponse('sensorResponse', r.data, r.success); refreshRawData(); }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  18. JAVASCRIPT - UNIFIED
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/unified.js" << 'EOF'
+async function mergeUnified() {
+  const w = parseInt(document.getElementById('mergeWindow').value) || 1000;
+  const r = await apiRequest('POST', '/unified/merge', { windowMs: w });
+  showResponse('unifiedResponse', r.data, r.success);
+  refreshRawData();
+}
+
+async function listUnified() {
+  const s = document.getElementById('unifiedSource').value;
+  const l = document.getElementById('unifiedLimit').value;
+  let ep = '/unified?limit=' + l;
+  if (s) ep += '&source=' + s;
+  const r = await apiRequest('GET', ep);
+  showResponse('unifiedResponse', r.data, r.success);
+}
+
+async function clearUnified() { const r = await apiRequest('DELETE', '/unified'); showResponse('unifiedResponse', r.data, r.success); state.rawData = []; renderRawData(); }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  19. JAVASCRIPT - LOG
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/log.js" << 'EOF'
 function logRequest(method, endpoint, reqBody, resData, status, duration) {
   state.requestLog.unshift({ time: new Date().toLocaleTimeString(), method, endpoint, reqBody, resData, status, duration });
   if (state.requestLog.length > 50) state.requestLog.pop();
@@ -1927,6 +2138,53 @@ function renderLog() {
 }
 
 function clearLog() { state.requestLog = []; renderLog(); }
+EOF
+
+# ════════════════════════════════════════════════════════
+#  20. JAVASCRIPT - APP (Inicialização)
+# ════════════════════════════════════════════════════════
+cat > "$PROJECT_DIR/js/app.js" << 'EOF'
+function showToast(msg, err = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function showResponse(id, data, ok) {
+  const el = document.getElementById(id);
+  el.className = 'response-box ' + (ok ? 'success' : 'error');
+  el.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+}
+
+function switchTab(ev, name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  ev.target.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'analyzer') startAutoRefresh();
+  else stopAutoRefresh();
+}
+
+async function checkHealth() {
+  const r = await apiRequest('GET', '/health');
+  if (r.success) showToast(`✅ API online! ${r.data.uptime?.toFixed(1)}s`);
+  else showToast('❌ Offline: ' + (r.data.error||''), true);
+}
+
+function loadExampleFrame() {
+  document.getElementById('canId').value = '0x1A3';
+  document.getElementById('hexData').value = 'E8035A0000000000';
+  document.getElementById('dlc').value = '8';
+  updateFromHex();
+  showToast('Exemplo carregado');
+}
+
+function randomizeFrame() {
+  for (let i = 0; i < 8; i++) state.bytes[i] = Math.floor(Math.random() * 256);
+  updateHexInput(); renderBitMatrix();
+  showToast('🎲 Frame aleatório');
+}
 
 async function sendFrameWithRules() {
   if (!state.rules.length) { showToast('Crie regras primeiro!', true); return; }
@@ -1946,87 +2204,8 @@ async function sendFrameOnly() {
   else showToast('Erro: ' + (r.data.error||''), true);
 }
 
-async function syncRulesToApi() {
-  if (!state.rules.length) { showToast('Nenhuma regra!', true); return; }
-  const p = state.rules.map(r => ({ canId:r.canId, signalName:r.signalName, startBit:r.startBit, bitLength:r.bitLength, byteOrder:r.byteOrder, signed:r.signed, factor:r.factor, offset:r.offset, unit:r.unit }));
-  const r = await apiRequest('POST', '/decoding/rules', p);
-  if (r.success) showToast(`✅ ${state.rules.length} regras sincronizadas!`);
-  else showToast('Erro: ' + (r.data.error||''), true);
-}
-
-async function sendSensors() {
-  try {
-    const p = JSON.parse(document.getElementById('sensorPayload').value);
-    const r = await apiRequest('POST', '/sensors', p);
-    showResponse('sensorResponse', r.data, r.success);
-    if (r.success) { showToast('✅ Sensores!'); refreshRawData(); }
-  } catch (e) { showResponse('sensorResponse', { error: 'JSON inválido: ' + e.message }, false); }
-}
-
-async function listSensors() { const r = await apiRequest('GET', '/sensors'); showResponse('sensorResponse', r.data, r.success); }
-async function clearSensors() { const r = await apiRequest('DELETE', '/sensors'); showResponse('sensorResponse', r.data, r.success); refreshRawData(); }
-
-async function mergeUnified() {
-  const w = parseInt(document.getElementById('mergeWindow').value) || 1000;
-  const r = await apiRequest('POST', '/unified/merge', { windowMs: w });
-  showResponse('unifiedResponse', r.data, r.success);
-  refreshRawData();
-}
-
-async function listUnified() {
-  const s = document.getElementById('unifiedSource').value;
-  const l = document.getElementById('unifiedLimit').value;
-  let ep = '/unified?limit=' + l;
-  if (s) ep += '&source=' + s;
-  const r = await apiRequest('GET', ep);
-  showResponse('unifiedResponse', r.data, r.success);
-}
-
-async function clearUnified() { const r = await apiRequest('DELETE', '/unified'); showResponse('unifiedResponse', r.data, r.success); state.rawData = []; renderRawData(); }
-
-async function checkHealth() {
-  const r = await apiRequest('GET', '/health');
-  if (r.success) showToast(`✅ API online! ${r.data.uptime?.toFixed(1)}s`);
-  else showToast('❌ Offline: ' + (r.data.error||''), true);
-}
-
-function showResponse(id, data, ok) {
-  const el = document.getElementById(id);
-  el.className = 'response-box ' + (ok ? 'success' : 'error');
-  el.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-}
-
-function showToast(msg, err = false) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show' + (err ? ' error' : '');
-  setTimeout(() => t.className = 'toast', 3000);
-}
-
-function switchTab(ev, name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  ev.target.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'analyzer') startAutoRefresh();
-  else stopAutoRefresh();
-}
-
-function loadExampleFrame() {
-  document.getElementById('canId').value = '0x1A3';
-  document.getElementById('hexData').value = 'E8035A0000000000';
-  document.getElementById('dlc').value = '8';
-  updateFromHex();
-  showToast('Exemplo carregado');
-}
-
-function randomizeFrame() {
-  for (let i = 0; i < 8; i++) state.bytes[i] = Math.floor(Math.random() * 256);
-  updateHexInput(); renderBitMatrix();
-  showToast('🎲 Frame aleatório');
-}
-
 window.addEventListener('load', () => {
+  initTheme();
   document.getElementById('sensorPayload').value = `{\n  "sensorId": "temp-01",\n  "sensorType": "temperature",\n  "value": 25.5,\n  "unit": "°C",\n  "timestamp": ${Date.now()}\n}`;
   updateFromHex(); renderBitMatrix();
   ['factor','offset','unit','signed','byteOrder'].forEach(id => {
@@ -2035,6 +2214,22 @@ window.addEventListener('load', () => {
   });
   setTimeout(() => loadRulesFromApi(), 300);
 });
-</script>
-</body>
-</html>
+EOF
+
+echo ""
+echo "✅ Estrutura criada com sucesso!"
+echo ""
+echo "📁 Estrutura:"
+find "$PROJECT_DIR" -type f | sort | sed 's/^/   /'
+echo ""
+echo "▶️  Para rodar:"
+echo "   cd $PROJECT_DIR"
+echo "   python3 -m http.server 8080"
+echo ""
+echo "🌐 Abra: http://localhost:8080"
+echo ""
+echo "🎨 Funcionalidades:"
+echo "   ✅ Tema claro/escuro (botão 🌙/☀️)"
+echo "   ✅ Totalmente responsivo (mobile, tablet, desktop)"
+echo "   ✅ Código modular e organizado"
+echo "   ✅ Todas as funcionalidades preservadas"

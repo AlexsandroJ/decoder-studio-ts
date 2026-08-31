@@ -75,7 +75,7 @@ class DecodingController {
    * GET /api/decoding/rules/:id
    */
   getById = (req: Request, res: Response<IApiResponse>): void => {
-    const rule = DecodingRuleModel.findById(req.params.id);
+    const rule = DecodingRuleModel.findById(req.params.id as string);
     if (!rule) {
       res.status(404).json({ success: false, error: "Regra não encontrada." });
       return;
@@ -87,7 +87,7 @@ class DecodingController {
    * DELETE /api/decoding/rules/:id
    */
   remove = (req: Request, res: Response<IApiResponse>): void => {
-    const deleted = DecodingRuleModel.delete(req.params.id);
+    const deleted = DecodingRuleModel.delete(req.params.id as string);
     if (!deleted) {
       res.status(404).json({ success: false, error: "Regra não encontrada." });
       return;

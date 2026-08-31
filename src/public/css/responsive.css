@@ -1,0 +1,28 @@
+@media (max-width: 1200px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .byte-analyzer-container { grid-template-columns: 1fr; }
+  .frame-input-row { grid-template-columns: 1fr; }
+  .signal-form { grid-template-columns: 1fr; }
+  .translations-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  body { padding: 10px; }
+  header { padding: 16px; }
+  header h1 { font-size: 1.2em; }
+  .header-config input { width: 100%; }
+  .bit { width: 32px; height: 32px; font-size: 11px; }
+  .bit-indexes span { width: 32px; }
+  .byte-grid { grid-template-columns: repeat(4, 1fr); }
+  .byte-cell .byte-value { font-size: 18px; }
+  .panel-body { padding: 12px; }
+  .sniffer-table { font-size: 10px; }
+  .sniffer-table td, .sniffer-table th { padding: 4px 6px; }
+  .byte-cell-small { min-width: 24px; padding: 2px 4px; font-size: 10px; }
+}
+
+@media (max-width: 480px) {
+  .byte-grid { grid-template-columns: repeat(2, 1fr); }
+  .tab { padding: 10px 12px; font-size: 11px; }
+  .btn { padding: 8px 12px; font-size: 12px; }
+}

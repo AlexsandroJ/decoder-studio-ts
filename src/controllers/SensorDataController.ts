@@ -81,7 +81,7 @@ class SensorDataController {
    * GET /api/sensors/:id
    */
   getById = (req: Request, res: Response<IApiResponse>): void => {
-    const reading = SensorDataModel.findById(req.params.id);
+    const reading = SensorDataModel.findById(req.params.id as string);
     if (!reading) {
       res.status(404).json({ success: false, error: "Leitura não encontrada." });
       return;
