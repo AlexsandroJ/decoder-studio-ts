@@ -35,8 +35,7 @@ const canFrameSchema = new Schema<ICanFrame>(
     timestamp: {
       type: Number,
       required: true,
-      index: true,
-      default: Date.now
+      index: true
     },
     interface: {
       type: String,

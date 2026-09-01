@@ -13,26 +13,27 @@ async ingestCanFrames(frames: ICanFrame[]): Promise<IUnifiedRecord[]> {
   const records: Partial<IUnifiedRecord>[] = [];
 
   for (const frame of frames) {
+    /*
     console.log("🔍 Frame recebido:", {
       canId: frame.canId,
       data: frame.data,
       timestamp: frame.timestamp
     });
-
+    */
     if (!frame.data) {
       console.warn("⚠️ Frame sem campo data, pulando decodificação");
       continue;
     }
 
     const rules = await DecodingRuleService.findByCanId(frame.canId);
-    console.log(`📋 Regras encontradas para ${frame.canId}: ${rules.length}`);
+    //console.log(`📋 Regras encontradas para ${frame.canId}: ${rules.length}`);
 
     if (rules.length === 0) {
       console.warn(`⚠️ Nenhuma regra para canId: ${frame.canId}`);
     }
 
     const decodedSignals = CanDecoderService.decodeFrame(frame, rules);
-    console.log(` Sinais decodificados: ${decodedSignals.length}`);
+    //console.log(` Sinais decodificados: ${decodedSignals.length}`);
 
     if (decodedSignals.length === 0) continue;
 
@@ -47,7 +48,7 @@ async ingestCanFrames(frames: ICanFrame[]): Promise<IUnifiedRecord[]> {
     records.push(record);
   }
 
-  console.log(`💾 Salvando ${records.length} registros unificados`);
+  //console.log(`💾 Salvando ${records.length} registros unificados`);
   return await UnifiedModelService.insertMany(records);
 }
 

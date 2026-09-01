@@ -59,22 +59,21 @@ let client: mqtt.MqttClient | null = null;
  * Detecta se o payload é um frame CAN ou dado customizado
  */
 function isCanPayload(payload: any): payload is CanPayload {
-  return payload.canId !== undefined && payload.data !== undefined;
+  return typeof payload === 'object' && payload !== null && payload.canId !== undefined && payload.data !== undefined;
 }
 
-/**
- * Converte payload CAN para ICanFrame
- */
 function canPayloadToFrame(payload: CanPayload): ICanFrame {
-  const dataHex = Array.isArray(payload.data)
-    ? payload.data.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join('')
-    : payload.data;
+  const rawHex = Array.isArray(payload.data)
+    ? payload.data.map(b => (b & 0xff).toString(16).toUpperCase().padStart(2, '0')).join('')
+    : String(payload.data);
+
+  const dataHex = (rawHex.length % 2 !== 0 ? '0' + rawHex : rawHex).toUpperCase();
 
   return {
     id: uuid(),
     canId: payload.canId,
     dlc: payload.dlc ?? Math.ceil(dataHex.length / 2),
-    data: dataHex.toUpperCase(),
+    data: dataHex,
     timestamp: payload.timestamp ?? Date.now(),
     interface: payload.interface || 'mqtt',
   };
@@ -130,7 +129,7 @@ async function processCustomData(payloads: CustomPayload[]): Promise<IUnifiedRec
   // 2. Usamos await para esperar a Promise resolver e retornar o array real.
   const saved = await UnifiedDataService.insertMany(records);
 
-  console.log(`✅ CUSTOM: ${saved.length} registro(s) salvo(s)`);
+  //console.log(`✅ CUSTOM: ${saved.length} registro(s) salvo(s)`);
   
   // 'saved' agora é do tipo IUnifiedRecord[], que corresponde exatamente ao retorno da função
   return saved; 
