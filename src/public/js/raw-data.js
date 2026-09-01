@@ -1,13 +1,14 @@
 async function refreshRawData() {
   try {
     showToast('🔄 Carregando dados...');
-    const [unifiedRes, sensorsRes] = await Promise.all([
+    const [unifiedRes, framesRes, sensorsRes] = await Promise.all([
       apiRequest('GET', '/unified?limit=500'),
+      apiRequest('GET', '/frames?limit=500'),
       apiRequest('GET', '/sensors?limit=500')
     ]);
 
     const all = [];
-    /*
+    
     if (framesRes.success) {
       const frames = framesRes.data.data || framesRes.data || [];
       if (Array.isArray(frames)) {
@@ -20,7 +21,7 @@ async function refreshRawData() {
         });
       }
     }
-      */
+      
 
     if (sensorsRes.success) {
       const sensors = sensorsRes.data.data || sensorsRes.data || [];

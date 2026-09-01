@@ -1,90 +1,118 @@
 import { v4 as uuid } from "uuid";
 import { ICanFrame, ISensorData, IUnifiedRecord, IDecodedSignal } from "../types";
 import CanDecoderService from "./CanDecoderService";
-import DecodingRuleModel from "../models/DecodingRuleModel";
-import UnifiedDataModel from "../models/UnifiedDataModel";
+import { DecodingRuleService } from "../models/DecodingRuleModel";
+import { UnifiedDataService as UnifiedModelService } from "../models/UnifiedDataModel";
 
 class UnifiedDataService {
-  /**
-   * Recebe frames CAN, decodifica e armazena como unified records.
-   */
-  ingestCanFrames(frames: ICanFrame[]): IUnifiedRecord[] {
-    const records: IUnifiedRecord[] = [];
-
-    for (const frame of frames) {
-      const rules = DecodingRuleModel.findByCanId(frame.canId);
-      const decodedSignals: IDecodedSignal[] =
-        CanDecoderService.decodeFrame(frame, rules);
-
-      if (decodedSignals.length === 0) continue;
-
-      const record: IUnifiedRecord = {
-        id: uuid(),
-        timestamp: frame.timestamp,
-        source: "can",
-        canSignals: decodedSignals,
-      };
-
-      records.push(UnifiedDataModel.insert(record));
-    }
-
-    return records;
-  }
 
   /**
    * Recebe leituras de sensores e armazena como unified records.
    */
-  ingestSensorData(readings: ISensorData[]): IUnifiedRecord[] {
-    return readings.map((reading) => {
-      const record: IUnifiedRecord = {
-        id: uuid(),
-        timestamp: reading.timestamp,
-        source: "sensor",
-        sensorReadings: [reading],
-      };
-      return UnifiedDataModel.insert(record);
+async ingestCanFrames(frames: ICanFrame[]): Promise<IUnifiedRecord[]> {
+  const records: Partial<IUnifiedRecord>[] = [];
+
+  for (const frame of frames) {
+    console.log("🔍 Frame recebido:", {
+      canId: frame.canId,
+      data: frame.data,
+      timestamp: frame.timestamp
     });
+
+    if (!frame.data) {
+      console.warn("⚠️ Frame sem campo data, pulando decodificação");
+      continue;
+    }
+
+    const rules = await DecodingRuleService.findByCanId(frame.canId);
+    console.log(`📋 Regras encontradas para ${frame.canId}: ${rules.length}`);
+
+    if (rules.length === 0) {
+      console.warn(`⚠️ Nenhuma regra para canId: ${frame.canId}`);
+    }
+
+    const decodedSignals = CanDecoderService.decodeFrame(frame, rules);
+    console.log(` Sinais decodificados: ${decodedSignals.length}`);
+
+    if (decodedSignals.length === 0) continue;
+
+    const record: Partial<IUnifiedRecord> = {
+      id: uuid(),
+      timestamp: frame.timestamp,
+      source: "can",
+      canSignals: decodedSignals,
+      
+    };
+
+    records.push(record);
   }
+
+  console.log(`💾 Salvando ${records.length} registros unificados`);
+  return await UnifiedModelService.insertMany(records);
+}
 
   /**
    * Cria registros "merged" combinando sinais CAN + sensores
    * dentro de uma janela de tempo (ms).
    */
-  mergeByTimeWindow(windowMs = 1000): IUnifiedRecord[] {
-    const all = UnifiedDataModel.findAll(9999);
-    const merged: IUnifiedRecord[] = [];
+  async mergeByTimeWindow(windowMs: number = 1000): Promise<IUnifiedRecord[]> {
+    // ✅ Usa o serviço para buscar todos os registros
+    const all: IUnifiedRecord[] = await UnifiedModelService.findRecent(9999);
+    const merged: Partial<IUnifiedRecord>[] = [];
     const processed = new Set<string>();
 
-    const sorted = all.sort((a, b) => a.timestamp - b.timestamp);
+    // ✅ Tipagem explícita nos parâmetros do sort
+    const sorted = all.sort((a: IUnifiedRecord, b: IUnifiedRecord) => 
+      a.timestamp - b.timestamp
+    );
 
     for (const record of sorted) {
       if (processed.has(record.id)) continue;
 
-      const window = sorted.filter(
-        (r) =>
-          !processed.has(r.id) &&
-          Math.abs(r.timestamp - record.timestamp) <= windowMs
+      // ✅ Tipagem explícita no filter
+      const window = sorted.filter((r: IUnifiedRecord) =>
+        !processed.has(r.id) &&
+        Math.abs(r.timestamp - record.timestamp) <= windowMs
       );
 
-      const canSignals = window.flatMap((r) => r.canSignals ?? []);
-      const sensorReadings = window.flatMap((r) => r.sensorReadings ?? []);
+      // ✅ Tipagem explícita no flatMap
+      const canSignals = window.flatMap((r: IUnifiedRecord) => r.canSignals ?? []);
+      const sensorReadings = window.flatMap((r: IUnifiedRecord) => r.sensorReadings ?? []);
 
       if (canSignals.length > 0 && sensorReadings.length > 0) {
-        const mergedRecord: IUnifiedRecord = {
+        const mergedRecord: Partial<IUnifiedRecord> = {
           id: uuid(),
           timestamp: record.timestamp,
           source: "merged",
           canSignals,
           sensorReadings,
           tags: ["auto-merged"],
+          
         };
-        merged.push(UnifiedDataModel.insert(mergedRecord));
+        merged.push(mergedRecord);
       }
 
-      window.forEach((r) => processed.add(r.id));
+      // ✅ Tipagem explícita no forEach
+      window.forEach((r: IUnifiedRecord) => processed.add(r.id));
     }
 
-    return merged;
+    // ✅ Salva os registros merged
+    return await UnifiedModelService.insertMany(merged);
+  }
+
+  /**
+   * Ingestão de dados customizados/arbitrários
+   */
+  async ingestCustomData(records: Partial<IUnifiedRecord>[]): Promise<IUnifiedRecord[]> {
+    const normalized: Partial<IUnifiedRecord>[] = records.map((r) => ({
+      id: r.id || uuid(),
+      timestamp: r.timestamp || Date.now(),
+      source: r.source || "custom",
+      customData: r.customData || {},
+      tags: r.tags || [],
+    }));
+
+    return await UnifiedModelService.insertMany(normalized);
   }
 }
 

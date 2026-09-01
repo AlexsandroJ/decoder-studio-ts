@@ -68,3 +68,5 @@ window.addEventListener('load', () => {
   });
   setTimeout(() => loadRulesFromApi(), 300);
 });
+
+

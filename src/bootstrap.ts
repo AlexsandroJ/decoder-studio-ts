@@ -1,33 +1,26 @@
-import DecodingRuleModel from "./models/DecodingRuleModel";
-import { allDecodingRules } from "./config/decodingRules";
+// src/bootstrap.ts
+import { DecodingRuleService } from "./models/DecodingRuleModel";
+import { DEFAULT_DECODING_RULES } from "./config/decodingRules";
 
-/**
- * Bootstrap da aplicação:
- * - Carrega regras de decodificação padrão
- * - Inicializa dados em memória
- * - Roda ANTES do servidor começar a aceitar requisições
- */
-export function bootstrap(): void {
-  console.log("\n🚀 Inicializando aplicação...");
+export async function bootstrap(): Promise<void> {
+  console.log("🔄 Inicializando aplicação (Bootstrap)...");
 
-  // 1. Carrega regras de decodificação
-  const countBefore = DecodingRuleModel.findAll().length;
-  
-  if (countBefore === 0) {
-    const loaded = DecodingRuleModel.insertMany(allDecodingRules);
-    console.log(`   ✅ ${loaded.length} regras de decodificação carregadas`);
+  try {
+    // 1. Usa o SERVIÇO para contar, não o modelo direto
+    const existingCount = await DecodingRuleService.count();
     
-    // Log detalhado por CAN ID
-    const grouped = new Map<string, number>();
-    loaded.forEach((r) => {
-      grouped.set(r.canId, (grouped.get(r.canId) ?? 0) + 1);
-    });
-    grouped.forEach((count, canId) => {
-      console.log(`      📡 ${canId}: ${count} sinais`);
-    });
-  } else {
-    console.log(`   ⏭️  ${countBefore} regras já existentes (skip)`);
+    if (existingCount === 0) {
+      console.log("📦 Nenhuma regra encontrada. Carregando regras padrão...");
+      
+      // 2. Usa o SERVIÇO para inserir em massa
+      await DecodingRuleService.insertMany(DEFAULT_DECODING_RULES);
+      
+      console.log(`✅ ${DEFAULT_DECODING_RULES.length} regras de decodificação carregadas com sucesso!`);
+    } else {
+      console.log(`✅ ${existingCount} regras de decodificação já existem no banco. Pulando seed.`);
+    }
+  } catch (error) {
+    console.error("❌ Erro crítico durante o bootstrap:", error);
+    throw error; // Propaga o erro para o server.ts encerrar a aplicação com segurança
   }
-
-  console.log("✅ Bootstrap concluído\n");
 }

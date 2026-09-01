@@ -45,13 +45,17 @@ export interface ISensorData {
   metadata?: Record<string, unknown>;
 }
 
+
+export type UnifiedSource = "can" | "sensor" | "merged" | "custom" | string;
+
 // ── Dado unificado (CAN decodificado + sensores) ──
 export interface IUnifiedRecord {
   id: string;
   timestamp: number;
-  source: "can" | "sensor" | "merged";
+  source: UnifiedSource;
   canSignals?: IDecodedSignal[];
   sensorReadings?: ISensorData[];
+  customData?: Record<string, any>;
   tags?: string[];
 }
 

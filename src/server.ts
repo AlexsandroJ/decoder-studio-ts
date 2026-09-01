@@ -8,6 +8,8 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { connectDB, disconnectDB } from './config/db';
+import { connectMQTT, disconnectMQTT } from './mqtt/mqttClient';
+
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -17,10 +19,12 @@ const USE_HTTPS = process.env.USE_HTTPS === "true";
 async function startServer() {
   try {
     console.log(`\n🔄 [${NODE_ENV.toUpperCase()}] Iniciando inicialização (bootstrap)...`);
-    await connectDB();
-    console.log('✅ Banco de dados pronto.\n');
-    await bootstrap();
-    console.log("✅ Bootstrap concluído com sucesso.\n");
+    
+    connectDB();
+
+    connectMQTT();
+
+    //bootstrap();
 
     let server: http.Server | https.Server;
 
@@ -72,6 +76,8 @@ async function startServer() {
     const gracefulShutdown = (signal: string) => {
       console.log(`\n🛑 Sinal ${signal} recebido. Iniciando desligamento gracioso...`);
       server.close(() => {
+        disconnectMQTT();
+        disconnectDB();
         console.log("✅ Servidor fechado. Conexões encerradas.");
         process.exit(0);
       });

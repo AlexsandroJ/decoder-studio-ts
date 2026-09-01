@@ -45,9 +45,33 @@ export const connectDB = async (): Promise<void> => {
       const port = env.DB_PORT || '27017';
       const name = env.DB_NAME || 'api_db';
 
-      const uri = `mongodb://${user}:${pass}@${host}:${port}/${name}?authSource=admin`;
-      await mongoose.connect(uri);
-      console.log('✅ Conectado ao MongoDB real.');
+      // 🧠 Lógica inteligente para detectar se é Cloud ou Local
+      const isCloud = host.includes('mongodb.net') || host.includes('srv');
+      const protocol = isCloud ? 'mongodb+srv' : 'mongodb';
+
+      // Cloud não usa porta na URI, Local usa
+      const portString = isCloud ? '' : `:${port}`;
+
+      const uri = `${protocol}://${user}:${pass}@${host}${portString}${name}?authSource=admin`;
+
+      console.log(`🔄 Conectando ao MongoDB (${isCloud ? 'Cloud' : 'Local'}) em: ${host}...`);
+
+      await mongoose.connect(uri, {
+        // Opções recomendadas para produção
+        serverSelectionTimeoutMS: 5000, // Falha rápida (5s) se o banco estiver fora do ar
+        socketTimeoutMS: 45000,
+      });
+
+      console.log('✅ MongoDB conectado com sucesso!');
+
+      // Listeners opcionais para monitorar o estado da conexão
+      mongoose.connection.on('error', (err) => {
+        console.error('❌ Erro de conexão com MongoDB:', err);
+      });
+
+      mongoose.connection.on('disconnected', () => {
+        console.log('⚠️ MongoDB desconectado.');
+      });
     }
   } catch (error) {
     console.error('❌ Erro fatal ao conectar ao MongoDB:', error);
@@ -66,7 +90,7 @@ export const disconnectDB = async (): Promise<void> => {
       for (const key in collections) {
         await collections[key].deleteMany({});
       }
-      
+
       await mongoServer.stop();
       mongoServer = null;
       console.log('🛑 MongoDB em memória parado e dados limpos.');
