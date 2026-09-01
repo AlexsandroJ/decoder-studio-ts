@@ -1,5 +1,5 @@
 import { IUnifiedRecord, IDecodedSignal, ISensorData, UnifiedSource } from "../types";
-
+import { v4 as uuid } from "uuid";
 import mongoose, { Schema, Document } from 'mongoose';
 
 // ════════════════════════════════════════════════════════
@@ -142,7 +142,64 @@ export const UnifiedDataService = {
 
   async count(): Promise<number> {
     return await UnifiedDataModel.countDocuments();
-  }
+  },
+    /**
+   * Agrupa registros de CAN e Sensor que estejam dentro da mesma janela de tempo.
+   * Retorna registros unificados com source: "merged".
+   */
+  async mergeByTimeWindow(windowMs: number): Promise<IUnifiedRecord[]> {
+    // 1. Busca todos os registros recentes (últimos 10 minutos por exemplo)
+    const recentTimestamp = Date.now() - (10 * 60 * 1000);
+    const allRecords = await UnifiedDataModel.find({
+      timestamp: { $gte: recentTimestamp },
+      source: { $in: ["can", "sensor"] }
+    }).sort({ timestamp: 1 }).lean();
+
+    if (allRecords.length === 0) return [];
+
+    // 2. Agrupa por janela de tempo
+    const mergedGroups: IUnifiedRecord[] = [];
+    let currentGroup: IUnifiedRecord | null = null;
+
+    for (const record of allRecords) {
+      if (!currentGroup) {
+        // Inicia um novo grupo
+        currentGroup = {
+          id: `merged_${uuid()}`,
+          timestamp: record.timestamp,
+          source: "merged",
+          canSignals: record.canSignals || [],
+          sensorReadings: record.sensorReadings || [],
+          tags: ["auto-merged"]
+        };
+      } else if (record.timestamp - currentGroup.timestamp <= windowMs) {
+        // Mesmo grupo: adiciona os sinais
+        if (record.canSignals) currentGroup.canSignals!.push(...record.canSignals);
+        if (record.sensorReadings) currentGroup.sensorReadings!.push(...record.sensorReadings);
+      } else {
+        // Novo grupo: salva o anterior e inicia um novo
+        mergedGroups.push(currentGroup);
+        currentGroup = {
+          id: `merged_${uuid()}`,
+          timestamp: record.timestamp,
+          source: "merged",
+          canSignals: record.canSignals || [],
+          sensorReadings: record.sensorReadings || [],
+          tags: ["auto-merged"]
+        };
+      }
+    }
+
+    // Não esquece do último grupo
+    if (currentGroup) mergedGroups.push(currentGroup);
+
+    // 3. Salva os registros fundidos no banco
+    if (mergedGroups.length > 0) {
+      await UnifiedDataModel.insertMany(mergedGroups);
+    }
+
+    return mergedGroups;
+  },
 };
 
 export default UnifiedDataModel;

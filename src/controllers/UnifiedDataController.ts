@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
-import { IApiResponse } from "../types";
+import { IApiResponse, IUnifiedRecord } from "../types";
 import { UnifiedDataService } from "../models/UnifiedDataModel";
-import UnifiedDataProcessor from "../services/UnifiedDataService";
 
 class UnifiedDataController {
   /**
@@ -13,7 +12,7 @@ class UnifiedDataController {
       const l = parseInt(limit as string, 10) || 200;
 
       const data = source
-        ? await UnifiedDataService.findBySource(source as any, l)
+        ? await UnifiedDataService.findBySource(source as string, l)
         : await UnifiedDataService.findRecent(l);
 
       res.json({ success: true, data, count: data.length });
@@ -29,7 +28,7 @@ class UnifiedDataController {
     try {
       const record = await UnifiedDataService.findById(req.params.id as string);
       if (!record) {
-        res.status(404).json({ success: false, error: "Registro não encontrado." });
+        res.status(404).json({ success: false, error: "Registro unificado não encontrado." });
         return;
       }
       res.json({ success: true, data: record });
@@ -49,7 +48,7 @@ class UnifiedDataController {
       if (isNaN(start) || isNaN(end)) {
         res.status(400).json({
           success: false,
-          error: "Parâmetros 'start' e 'end' (epoch ms) são obrigatórios.",
+          error: "Parâmetros 'start' e 'end' (epoch ms) são obrigatórios e devem ser numéricos.",
         });
         return;
       }
@@ -63,16 +62,20 @@ class UnifiedDataController {
 
   /**
    * POST /api/unified/merge
+   * Funde registros de CAN e Sensor que estejam dentro da mesma janela de tempo.
+   * Body: { "windowMs": 500 }
    */
   merge = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
-      const windowMs = req.body?.windowMs ?? 1000;
-      const merged = await UnifiedDataProcessor.mergeByTimeWindow(windowMs);
+      const windowMs = req.body?.windowMs ?? 1000; // Padrão de 1 segundo
+      
+      // Chama o serviço que contém a lógica de agrupamento por timestamp
+      const mergedData = await UnifiedDataService.mergeByTimeWindow(windowMs);
 
-      res.status(201).json({
+      res.status(200).json({
         success: true,
-        data: merged,
-        count: merged.length,
+        data: mergedData,
+        count: mergedData.length,
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
@@ -90,44 +93,6 @@ class UnifiedDataController {
       res.status(500).json({ success: false, error: err.message });
     }
   };
-
-  /**
-   * POST /api/unified
-   * Recebe dados arbitrários/customizados que não se encaixam no padrão CAN/Sensor.
-   * Body: IUnifiedRecord | IUnifiedRecord[]
-   */
-  /*
-  ingest = (req: Request, res: Response<IApiResponse>): void => {
-    try {
-      const raw = Array.isArray(req.body) ? req.body : [req.body];
-
-      if (raw.length === 0) {
-        res.status(400).json({ success: false, error: "Payload vazio." });
-        return;
-      }
-
-      // Normaliza os dados, garantindo que customData capture o payload
-      const records: Partial<IUnifiedRecord>[] = raw.map((r: any) => ({
-        id: r.id || uuid(),
-        timestamp: r.timestamp || Date.now(),
-        source: r.source || "custom",
-        // Se o usuário enviar { customData: {...} }, usa isso. Senão, usa o próprio objeto 'r'
-        customData: r.customData || r.data || r, 
-        tags: r.tags || ["custom-ingestion"]
-      }));
-
-      const saved = UnifiedDataService.ingestCustomData(records);
-
-      res.status(201).json({
-        success: true,
-        data: saved,
-        count: saved.length,
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
-    }
-  };
-  */
 }
 
 export default new UnifiedDataController();

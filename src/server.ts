@@ -24,7 +24,7 @@ async function startServer() {
 
     connectMQTT();
 
-    //bootstrap();
+    bootstrap();
 
     let server: http.Server | https.Server;
 

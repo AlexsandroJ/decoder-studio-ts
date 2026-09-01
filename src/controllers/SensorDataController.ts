@@ -7,8 +7,6 @@ import { UnifiedDataService } from "../models/UnifiedDataModel";
 class SensorDataController {
   /**
    * POST /api/sensors
-   * Recebe uma ou mais leituras de sensores genéricos.
-   * Body: ISensorData | ISensorData[]
    */
   ingest = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
@@ -19,51 +17,52 @@ class SensorDataController {
         return;
       }
 
-      // Normaliza os dados
-      const readings: Partial<ISensorData>[] = raw.map((s: any) => ({
-        id: s.id || uuid(),
-        sensorId: s.sensorId || "unknown",
-        sensorType: s.sensorType || "generic",
-        value: s.value ?? 0,
-        unit: s.unit,
-        timestamp: s.timestamp || Date.now(),
-        metadata: s.metadata,
-        deviceId: s.deviceId // Útil se o sensor vier de um dispositivo específico
-      }));
-
-      // Validação mínima
-      const invalid = readings.filter((r) => !r.sensorId);
+      // 1. Validação ESTRITA no dado bruto (Correção definitiva do bug de validação)
+      const invalid = raw.filter((r: any) => !r.sensorId);
       if (invalid.length > 0) {
         res.status(400).json({
           success: false,
-          error: `${invalid.length} leitura(s) sem sensorId.`,
+          error: `${invalid.length} leitura(s) inválida(s): 'sensorId' é obrigatório.`,
         });
         return;
       }
 
-      // 1. Salva no modelo de Sensores
+      // 2. Normalização segura para o tipo ISensorData
+      const readings: Partial<ISensorData>[] = raw.map((s: any) => ({
+        id: s.id || uuid(),
+        sensorId: String(s.sensorId),
+        sensorType: String(s.sensorType || "generic"),
+        value: s.value, // Aceita number, string, boolean ou object conforme a interface
+        unit: s.unit ? String(s.unit) : undefined,
+        timestamp: s.timestamp || Date.now(),
+        metadata: s.metadata || undefined,
+        deviceId: s.deviceId ? String(s.deviceId) : undefined
+      }));
+
+      // 3. Salvamento no modelo de Sensores
       const saved = await SensorDataService.insertMany(readings);
 
-      // 2. Mapeia para o formato Unificado e salva
-      const unifiedRecords: Partial<ISensorData>[] = saved.map((s: any) => ({
+      // 4. Mapeamento para o formato Unificado (IUnifiedRecord)
+      const unifiedRecords: Partial<IUnifiedRecord>[] = saved.map((s: any) => ({
         id: uuid(),
         timestamp: s.timestamp,
         source: "sensor",
         sensorReadings: [{
+          id: s.id,
           sensorId: s.sensorId,
           sensorType: s.sensorType,
           value: s.value,
-          unit: s.unit
+          unit: s.unit,
+          timestamp: s.timestamp
         }],
-        deviceId: s.deviceId,
-        tags: s.metadata ? ["has_metadata"] : []
+        tags: s.metadata ? ["has_metadata"] : undefined
       }));
 
-      const unified = await UnifiedDataService.insertMany(unifiedRecords);
+      await UnifiedDataService.insertMany(unifiedRecords);
 
       res.status(201).json({
         success: true,
-        data: { readings: saved, unifiedRecords: unified },
+        data: { readings: saved, unifiedRecords },
         count: saved.length,
       });
     } catch (err: any) {
@@ -71,23 +70,15 @@ class SensorDataController {
     }
   };
 
-  /**
-   * GET /api/sensors
-   * Query: ?sensorId=temp01&sensorType=temperature&limit=50
-   */
   list = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
       const { sensorId, sensorType, limit } = req.query;
       const l = parseInt(limit as string, 10) || 100;
 
       let data;
-      if (sensorId) {
-        data = await SensorDataService.findBySensorId(sensorId as string, l);
-      } else if (sensorType) {
-        data = await SensorDataService.findByType(sensorType as string, l);
-      } else {
-        data = await SensorDataService.findRecent(l);
-      }
+      if (sensorId) data = await SensorDataService.findBySensorId(sensorId as string, l);
+      else if (sensorType) data = await SensorDataService.findByType(sensorType as string, l);
+      else data = await SensorDataService.findRecent(l);
 
       res.json({ success: true, data, count: data.length });
     } catch (err: any) {
@@ -95,9 +86,6 @@ class SensorDataController {
     }
   };
 
-  /**
-   * GET /api/sensors/:id
-   */
   getById = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
       const reading = await SensorDataService.findById(req.params.id as string);
@@ -111,9 +99,6 @@ class SensorDataController {
     }
   };
 
-  /**
-   * DELETE /api/sensors
-   */
   clear = async (_req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
       await SensorDataService.clear();
@@ -124,5 +109,4 @@ class SensorDataController {
   };
 }
 
-// ⚠️ Exportação default é crucial para as rotas funcionarem
 export default new SensorDataController();

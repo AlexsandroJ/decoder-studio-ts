@@ -1,6 +1,6 @@
 import { v4 as uuid } from "uuid";
 import { ICanFrame, ISensorData, IUnifiedRecord, IDecodedSignal } from "../types";
-import CanDecoderService from "./CanDecoderService";
+import {CanDecoderService} from "./CanDecoderService";
 import { DecodingRuleService } from "../models/DecodingRuleModel";
 import { UnifiedDataService as UnifiedModelService } from "../models/UnifiedDataModel";
 
@@ -113,6 +113,13 @@ async ingestCanFrames(frames: ICanFrame[]): Promise<IUnifiedRecord[]> {
     }));
 
     return await UnifiedModelService.insertMany(normalized);
+  }
+
+  /**
+   * Método auxiliar direto para insertMany (caso algum controller precise)
+   */
+  async insertMany(records: Partial<IUnifiedRecord>[]): Promise<IUnifiedRecord[]> {
+    return await UnifiedModelService.insertMany(records);
   }
 }
 

@@ -1,10 +1,12 @@
 import { Request, Response } from "express";
 import { v4 as uuid } from "uuid";
 import { IApiResponse, IDecodingRule } from "../types";
-import { DecodingRuleService } from "../models/DecodingRuleModel"; // <-- Novo import
+import { DecodingRuleService } from "../models/DecodingRuleModel";
 
-class DecodingRuleController {
-  
+class DecodingController {
+  /**
+   * POST /api/decoding/rules
+   */
   create = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
       const raw = Array.isArray(req.body) ? req.body : [req.body];
@@ -13,20 +15,20 @@ class DecodingRuleController {
         return;
       }
 
+      // Normalização com valores padrão seguros conforme a interface IDecodingRule
       const rules: Partial<IDecodingRule>[] = raw.map((r: any) => ({
         id: r.id || `rule_${uuid()}`,
-        canId: r.canId,
-        signalName: r.signalName,
-        startBit: r.startBit,
-        bitLength: r.bitLength,
-        byteOrder: r.byteOrder || "big",
-        signed: r.signed ?? false,
-        factor: r.factor ?? 1,
-        offset: r.offset ?? 0,
-        unit: r.unit || "",
-        minValue: r.minValue,
-        maxValue: r.maxValue,
-        active: r.active ?? true
+        canId: String(r.canId),
+        signalName: String(r.signalName),
+        startBit: Number(r.startBit),
+        bitLength: Number(r.bitLength),
+        byteOrder: r.byteOrder === "little" ? "little" : "big",
+        signed: Boolean(r.signed),
+        factor: Number(r.factor) || 1,      // ← Use || ao invés de ??
+        offset: Number(r.offset) || 0,      // ← Use || ao invés de ??
+        unit: String(r.unit || ""),
+        minValue: r.minValue !== undefined ? Number(r.minValue) : undefined,
+        maxValue: r.maxValue !== undefined ? Number(r.maxValue) : undefined,
       }));
 
       const saved = await DecodingRuleService.insertMany(rules);
@@ -36,10 +38,13 @@ class DecodingRuleController {
     }
   };
 
+  /**
+   * GET /api/decoding/rules
+   */
   list = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
       const { canId } = req.query;
-      const rules = canId 
+      const rules = canId
         ? await DecodingRuleService.findByCanId(canId as string)
         : await DecodingRuleService.findAll();
 
@@ -49,6 +54,9 @@ class DecodingRuleController {
     }
   };
 
+  /**
+   * DELETE /api/decoding/rules/:id
+   */
   delete = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
       const { id } = req.params;
@@ -64,4 +72,4 @@ class DecodingRuleController {
   };
 }
 
-export default new DecodingRuleController();
+export default new DecodingController();

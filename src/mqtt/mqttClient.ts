@@ -125,11 +125,15 @@ async function processCanFrames(payloads: CanPayload[]): Promise<ICanFrame[]> {
 async function processCustomData(payloads: CustomPayload[]): Promise<IUnifiedRecord[]> {
   const records: IUnifiedRecord[] = payloads.map(customPayloadToUnified);
 
-  // Salva diretamente no unified
-  const saved = records.map(r => UnifiedDataService.ingestCustomData([r])[0]);
+  // ✅ CORREÇÃO: 
+  // 1. Usamos insertMany para salvar tudo de uma vez (mais rápido).
+  // 2. Usamos await para esperar a Promise resolver e retornar o array real.
+  const saved = await UnifiedDataService.insertMany(records);
 
   console.log(`✅ CUSTOM: ${saved.length} registro(s) salvo(s)`);
-  return saved;
+  
+  // 'saved' agora é do tipo IUnifiedRecord[], que corresponde exatamente ao retorno da função
+  return saved; 
 }
 
 /**

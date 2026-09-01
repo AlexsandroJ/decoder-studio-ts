@@ -91,7 +91,7 @@ export const DecodingRuleService = {
   },
 
   async findByCanId(canId: string): Promise<IDecodingRule[]> {
-    return await DecodingRuleModel.find({ canId, active: true })
+    return await DecodingRuleModel.find({ canId })
       .sort({ startBit: 1 })
       .lean();
   },
