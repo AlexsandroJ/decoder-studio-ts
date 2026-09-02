@@ -47,7 +47,7 @@
                 <span id="lastUpdate">—</span>
             </div>
             <div class="status-item">
-                <span>️ Intervalo:</span>
+                <span>Intervalo:</span>
                 <input type="number" id="refreshInterval" value="1000" min="100" step="100">
                 <span>ms</span>
             </div>
@@ -90,8 +90,29 @@
                         <button class="btn btn-primary" onclick="loadSignalsFromApi()">🔄 Carregar da API</button>
                         <input type="text" id="signalSearch" placeholder="🔍 Buscar sinal..." oninput="filterSignals()">
                     </div>
+
+                    <!-- NOVA BARRA DE SELEÇÃO EM LOTE (Inicialmente oculta) -->
+                    <div class="bulk-select-toolbar" id="bulkSelectToolbar"
+                        style="display: none; align-items: center; justify-content: space-between; padding: 12px; background: rgba(0, 212, 255, 0.05); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--accent-color, #00d4ff);">
+                        <label
+                            style="display: flex; align-items: center; cursor: pointer; color: var(--text-color, #fff); font-weight: 600; font-size: 0.95em;">
+                            <input type="checkbox" id="selectAllSignals"
+                                style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color, #00d4ff);">
+                            <span>Todas</span>
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span id="selectedCount"
+                                style="color: var(--accent-color, #00d4ff); font-weight: bold; font-size: 0.9em;">0
+                                selecionadas</span>
+                            <button class="btn btn-accent" onclick="addSelectedSignals()"
+                                style="padding: 6px 16px; font-size: 0.9em; font-weight: 600;">
+                                ➕ Adicionar
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="signal-list" id="signalList">
-                        <div class="empty-config">Clique em " Carregar da API" para ver sinais disponíveis</div>
+                        <div class="empty-config">Clique em "🔄 Carregar da API" para ver sinais disponíveis</div>
                     </div>
                 </div>
 
