@@ -30,7 +30,7 @@ spec:
             - name: NODE_ENV
               value: "production"
             - name: USE_HTTPS
-              value: "true"
+              value: "false"
             - name: SSL_KEY_PATH
               value: "./src/certs/key.pem"
             - name: SSL_CERT_PATH
@@ -63,55 +63,30 @@ kind: Service
 metadata:
   name: decoder-studio
 spec:
-  type: NodePort # ALTERADO: De LoadBalancer para NodePort
+  type: LoadBalancer # ALTERADO: De LoadBalancer para NodePort
   selector:
     app: decoder-studio
   ports:
-    - protocol: TCP
+    - name: tcp
+      protocol: TCP
       port: 3001
       targetPort: 3001
       nodePort: 31443
 ---
+---
 # ==========================================
 # 1. EMQX BROKER (Endpoint Prometheus Nativo)
 # ==========================================
----
 apiVersion: v1
-kind: Service
+kind: PersistentVolumeClaim
 metadata:
-  name: emqx
+  name: emqx-data
   namespace: default
-  labels:
-    app: emqx
 spec:
-  type: NodePort
-  ports:
-  - name: mqtt
-    port: 1883
-    targetPort: 1883
-    nodePort: 31883  # Porta externa para conexões MQTT
-  - name: dashboard
-    port: 18083
-    targetPort: 18083
-    nodePort: 31083  # Porta externa para acessar o Dashboard web
-  selector:
-    app: emqx
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: emqx-headless
-  namespace: default
-  labels:
-    app: emqx
-spec:
-  clusterIP: None
-  ports:
-  - name: mqtt
-    port: 1883
-    targetPort: 1883
-  selector:
-    app: emqx
+  accessModes: [ ReadWriteOnce ]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -136,14 +111,9 @@ spec:
         image: docker.io/emqx/emqx:5.8
         imagePullPolicy: IfNotPresent
         ports:
-        - name: mqtt
-          containerPort: 1883
-        - name: dashboard
-          containerPort: 18083
+        - containerPort: 1883
+        - containerPort: 18083
         env:
-        # Trava do QoS em 0
-        - name: EMQX_MQTT__MAX_QOS_ALLOWED
-          value: "qos0"
         - name: EMQX_NODE__COOKIE
           value: "emqx-cookie-k8s"
         - name: EMQX_DASHBOARD__DEFAULT_USERNAME
@@ -154,12 +124,8 @@ spec:
         - name: emqx-data
           mountPath: /opt/emqx/data
         resources:
-          requests:
-            cpu: 200m
-            memory: 512Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
+          requests: { cpu: 200m, memory: 512Mi }
+          limits:   { cpu: 500m, memory: 1Gi }
         startupProbe:
           tcpSocket:
             port: 18083
@@ -173,6 +139,35 @@ spec:
       - name: emqx-data
         persistentVolumeClaim:
           claimName: emqx-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emqx-headless
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: emqx
+  ports:
+  - port: 1883
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emqx
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector:
+    app: emqx
+  ports:
+  - name: mqtt
+    port: 1883
+    targetPort: 1883
+  - name: dashboard
+    port: 18083
+    targetPort: 18083
 ---
 # ==========================================
 # 2. MQTT LATENCY PROBER (Mede RTT Real)
