@@ -2,39 +2,39 @@
 import { IDecodingRule } from "../types";
 
 // ════════════════════════════════════════════════════════
-//  1. REGRAS ESPECÍFICAS DO PROJETO (Voltz / Arduino)
+//  1. REGRAS ESPECÍFICAS DO PROJETO (AIMA )
 // ════════════════════════════════════════════════════════
 
-export const voltzEnergyRules: IDecodingRule[] = [
+export const AimaEnergyRules: IDecodingRule[] = [
   {
-    id: "voltz_battery_current",
+    id: "aima_battery_01_current",
     canId: "0x14",
-    signalName: "BatteryCurrent",
-    startBit: 0,
+    signalName: "BatteryCurrent_01",
+    startBit: 0, // Corrente em data[0] e data[1]
     bitLength: 16,
     byteOrder: "little",
-    signed: true,
-    factor: 0.01,
+    signed: true, // Inteiro Sinalizado (16-bit)
+    factor: 0.01, // Dividido por 100.0
     offset: 0,
     unit: "A",
   },
   {
-    id: "voltz_battery_voltage",
+    id: "aima_battery_01_voltage",
     canId: "0x14",
-    signalName: "BatteryVoltage",
-    startBit: 16,
+    signalName: "BatteryVoltage_01",
+    startBit: 16, // Tensão em data[2] e data[3]
     bitLength: 16,
     byteOrder: "little",
-    signed: false,
-    factor: 0.01,
+    signed: false, // Inteiro Não Sinalizado (16-bit)
+    factor: 0.01, // Dividido por 100.0
     offset: 0,
     unit: "V"
   },
   {
-    id: "voltz_battery_soc",
+    id: "aima_battery_01_soc",
     canId: "0x14",
-    signalName: "BatterySOC",
-    startBit: 32,
+    signalName: "BatterySOC_01",
+    startBit: 32, // SOC em data[4]
     bitLength: 8,
     byteOrder: "big",
     signed: false,
@@ -44,34 +44,47 @@ export const voltzEnergyRules: IDecodingRule[] = [
   },
   // Regras idênticas para o CAN ID 0x32A
   {
-    id: "voltz_battery_current_32a",
+    id: "aima_battery_02_current",
     canId: "0x32A",
-    signalName: "BatteryCurrent",
-    startBit: 0,
+    signalName: "BatteryCurrent_02",
+    startBit: 0, // Corrente em data[0] e data[1]
     bitLength: 16,
     byteOrder: "little",
-    signed: true,
-    factor: 0.01,
+    signed: true, // Inteiro Sinalizado (16-bit)
+    factor: 0.01, // Dividido por 100.0
     offset: 0,
     unit: "A"
   },
   {
-    id: "voltz_battery_voltage_32a",
+    id: "aima_battery_02_voltage",
     canId: "0x32A",
-    signalName: "BatteryVoltage",
-    startBit: 16,
+    signalName: "BatteryVoltage_02",
+    startBit: 16,  // Tensão em data[2] e data[3]
     bitLength: 16,
     byteOrder: "little",
-    signed: false,
-    factor: 0.01,
+    signed: false, // Inteiro Não Sinalizado (16-bit)
+    factor: 0.01, // Dividido por 100.0
     offset: 0,
     unit: "V"
-  }
+  },
+    {
+    id: "aima_battery_02_soc",
+    canId: "0x32A",
+    signalName: "BatterySOC_02",
+    startBit: 32, // SOC em data[4]
+    bitLength: 8,
+    byteOrder: "big",
+    signed: false,
+    factor: 1,
+    offset: 0,
+    unit: "%"
+  },
+  
 ];
 
-export const voltzMotorRules: IDecodingRule[] = [
+export const AimaMotorRules: IDecodingRule[] = [
   {
-    id: "voltz_motor_rpm",
+    id: "aima_motor_rpm",
     canId: "0x6A0",
     signalName: "MotorRPM",
     startBit: 32, // Byte 4 (Big Endian: MSB primeiro)
@@ -83,7 +96,7 @@ export const voltzMotorRules: IDecodingRule[] = [
     unit: "rpm"
   },
   {
-    id: "voltz_drive_mode",
+    id: "aima_drive_mode",
     canId: "0x6A1",
     signalName: "DriveMode",
     startBit: 0,
@@ -96,51 +109,14 @@ export const voltzMotorRules: IDecodingRule[] = [
   }
 ];
 
-// ════════════════════════════════════════════════════════
-//  2. REGRAS GENÉRICAS (Exemplos / Outros Controladores)
-// ════════════════════════════════════════════════════════
-
-export const genericBatteryRules: IDecodingRule[] = [
-  {
-    id: "gen_battery_voltage",
-    canId: "0x100",
-    signalName: "BatteryVoltage",
-    startBit: 0,
-    bitLength: 16,
-    byteOrder: "big",
-    signed: false,
-    factor: 0.1,
-    offset: 0,
-    unit: "V"
-  },
-  // ... adicione os outros (current, temp, soc, soh) aqui se necessário
-];
-
-export const genericMotorRules: IDecodingRule[] = [
-  {
-    id: "gen_motor_rpm",
-    canId: "0x200",
-    signalName: "MotorRPM",
-    startBit: 0,
-    bitLength: 16,
-    byteOrder: "big",
-    signed: false,
-    factor: 1,
-    offset: 0,
-    unit: "rpm"
-  },
-  // ... adicione os outros (torque, temps, mode) aqui se necessário
-];
 
 // ════════════════════════════════════════════════════════
 //  3. EXPORTAÇÃO UNIFICADA (Para Bootstrap/Seed)
 // ════════════════════════════════════════════════════════
 
 export const DEFAULT_DECODING_RULES: IDecodingRule[] = [
-  ...voltzEnergyRules,
-  ...voltzMotorRules,
-  ...genericBatteryRules,
-  ...genericMotorRules
+  ...AimaEnergyRules,
+  ...AimaMotorRules,
 ];
 
 // ════════════════════════════════════════════════════════

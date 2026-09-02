@@ -13,7 +13,7 @@ export class CanDecoderService {
     const bytes = this.hexToBytes(frame.data);
 
     for (const rule of rules) {
-      //if (!rule.active) continue;
+      // if (!rule.active) continue;
 
       const rawValue = this.extractBits(bytes, rule);
       const physicalValue = (rawValue * rule.factor) + rule.offset;
@@ -41,29 +41,34 @@ export class CanDecoderService {
   }
 
   private static extractBits(bytes: number[], rule: IDecodingRule): number {
-    let bitBuffer = 0n;
-    for (const b of bytes) bitBuffer = (bitBuffer << 8n) | BigInt(b);
-    
-    const totalBits = bytes.length * 8;
-    let adjustedStart = rule.startBit;
-    
+    const startByte = Math.floor(rule.startBit / 8);
+    const numBytes = Math.ceil(rule.bitLength / 8);
+
+    if (startByte + numBytes > bytes.length) return 0;
+
+    let raw = 0;
+
     if (rule.byteOrder === "little") {
-      const bytePos = Math.floor(rule.startBit / 8);
-      const bitPos = rule.startBit % 8;
-      adjustedStart = (7 - bytePos) * 8 + bitPos;
+      // 🟢 LITTLE-ENDIAN (ex: data[0] = LSB, data[1] = MSB)
+      // Idêntico ao Arduino: (data[1] << 8) | data[0]
+      for (let i = 0; i < numBytes; i++) {
+        raw |= (bytes[startByte + i] << (i * 8));
+      }
     } else {
-      adjustedStart = totalBits - 1 - rule.startBit;
+      // 🔵 BIG-ENDIAN (ex: data[0] = MSB, data[1] = LSB)
+      for (let i = 0; i < numBytes; i++) {
+        raw = (raw << 8) | bytes[startByte + i];
+      }
     }
-    
-    const endBit = adjustedStart - rule.bitLength + 1;
-    if (endBit < 0) return 0;
-    
-    const mask = (1n << BigInt(rule.bitLength)) - 1n;
-    let raw = Number((bitBuffer >> BigInt(endBit)) & mask);
-    
-    if (rule.signed && raw >= (1 << (rule.bitLength - 1))) {
-      raw -= (1 << rule.bitLength);
+
+    // 🔴 TRATAMENTO DE VALOR SINALIZADO (Signed / Complemento de 2)
+    if (rule.signed && rule.bitLength < 32) {
+      const mask = 1 << (rule.bitLength - 1);
+      if ((raw & mask) !== 0) {
+        raw = raw - (1 << rule.bitLength);
+      }
     }
+
     return raw;
   }
 }
