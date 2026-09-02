@@ -74,8 +74,28 @@ spec:
       nodePort: 31443
 ---
 # ==========================================
-# 1. EMQX BROKER (Endpoint Prometheus Nativo)
+# 1. EMQX BROKER (Endpoint Prometheus Nativo + Auth)
 # ==========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emqx-users-config
+  namespace: default
+data:
+  user_credentials.json: |
+    [
+      {
+        "username": "modcs",
+        "password": "12345678",
+        "is_admin": false
+      },
+      {
+        "username": "ajs6",
+        "password": "92371106",
+        "is_admin": false
+      }
+    ]
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -110,18 +130,38 @@ spec:
         image: docker.io/emqx/emqx:5.8
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 1883
-        - containerPort: 18083
+        - name: mqtt
+          containerPort: 1883
+        - name: dashboard
+          containerPort: 18083
         env:
         - name: EMQX_NODE__COOKIE
           value: "emqx-cookie-k8s"
+        # Habilita métricas nativas do Prometheus sem autenticação
+        - name: EMQX_PROMETHEUS__ENABLE
+          value: "true"
+        - name: EMQX_PROMETHEUS__AUTH_TYPE
+          value: "none"
+        # Credenciais Web Admin
         - name: EMQX_DASHBOARD__DEFAULT_USERNAME
           value: "admin"
         - name: EMQX_DASHBOARD__DEFAULT_PASSWORD
           value: "public"
+        # Autenticação de clientes MQTT por arquivo bootstrap
+        - name: EMQX_AUTHENTICATION__1__MECHANISM
+          value: "password_based"
+        - name: EMQX_AUTHENTICATION__1__BACKEND
+          value: "built_in_database"
+        - name: EMQX_AUTHENTICATION__1__USER_ID_TYPE
+          value: "username"
+        - name: EMQX_AUTHENTICATION__1__BOOTSTRAP_FILE
+          value: "/opt/emqx/etc/user_credentials.json"
         volumeMounts:
         - name: emqx-data
           mountPath: /opt/emqx/data
+        - name: emqx-user-credentials
+          mountPath: /opt/emqx/etc/user_credentials.json
+          subPath: user_credentials.json
         resources:
           requests: { cpu: 200m, memory: 512Mi }
           limits:   { cpu: 500m, memory: 1Gi }
@@ -138,6 +178,9 @@ spec:
       - name: emqx-data
         persistentVolumeClaim:
           claimName: emqx-data
+      - name: emqx-user-credentials
+        configMap:
+          name: emqx-users-config
 ---
 apiVersion: v1
 kind: Service
@@ -149,7 +192,9 @@ spec:
   selector:
     app: emqx
   ports:
-  - port: 1883
+  - name: mqtt
+    port: 1883
+    targetPort: 1883
 ---
 apiVersion: v1
 kind: Service
@@ -157,16 +202,18 @@ metadata:
   name: emqx
   namespace: default
 spec:
-  type: LoadBalancer
+  type: LoadBalancer # Ou NodePort, dependendo do seu ambiente
   selector:
     app: emqx
   ports:
   - name: mqtt
     port: 1883
     targetPort: 1883
+    nodePort: 31883
   - name: dashboard
     port: 18083
     targetPort: 18083
+    nodePort: 31083
 ---
 # ==========================================
 # 2. MQTT LATENCY PROBER (Mede RTT Real)
@@ -189,11 +236,16 @@ data:
 
     BROKER_HOST = os.getenv('MQTT_BROKER', 'emqx')
     BROKER_PORT = int(os.getenv('MQTT_PORT', 1883))
+    MQTT_USER = os.getenv('MQTT_USER', 'modcs')
+    MQTT_PASS = os.getenv('MQTT_PASSWORD', '12345678')
     TOPIC = "sys/monitoring/latency-test"
 
     def on_connect(client, userdata, flags, rc):
-        print(f"Conectado ao broker {BROKER_HOST} com código {rc}")
-        client.subscribe(TOPIC)
+        if rc == 0:
+            print(f"✅ Conectado com sucesso ao broker {BROKER_HOST}")
+            client.subscribe(TOPIC)
+        else:
+            print(f"❌ Falha na conexão. Código de retorno: {rc} (Verifique usuário/senha se rc=4 ou 5)")
 
     def on_message(client, userdata, msg):
         try:
@@ -210,10 +262,17 @@ data:
     start_http_server(8000)
     print("Servidor de métricas iniciado na porta 8000")
 
-    client = mqtt.Client(client_id="latency-prober-k8s")
+    # Gera ID único para evitar queda por ID duplicado
+    client_id = f"latency-prober-{int(time.time())}"
+    client = mqtt.Client(client_id=client_id)
+
+    # Autenticação com credenciais injetadas via env
+    if MQTT_USER and MQTT_PASS:
+        client.username_pw_set(MQTT_USER, MQTT_PASS)
+
     client.on_connect = on_connect
     client.on_message = on_message
-    
+
     client.connect(BROKER_HOST, BROKER_PORT, 60)
     client.loop_start()
 
@@ -250,8 +309,13 @@ spec:
           value: "emqx"
         - name: MQTT_PORT
           value: "1883"
+        - name: MQTT_USER
+          value: "modcs"
+        - name: MQTT_PASSWORD
+          value: "12345678"
         ports:
-        - containerPort: 8000
+        - name: metrics
+          containerPort: 8000
         volumeMounts:
         - name: script
           mountPath: /app/prober.py
@@ -277,8 +341,6 @@ spec:
   - name: metrics
     port: 8000
     targetPort: 8000
-
----
 # ==========================================
 # 3. PROMETHEUS (Lê EMQX + Latency Prober)
 # ==========================================
@@ -292,12 +354,14 @@ data:
     global:
       scrape_interval: 10s
       evaluation_interval: 10s
+
     scrape_configs:
       - job_name: 'emqx-native-metrics'
         metrics_path: /api/v5/prometheus/stats
         scheme: http
         static_configs:
           - targets: ['emqx:18083']
+
       - job_name: 'mqtt-latency-prober'
         metrics_path: '/'
         static_configs:
@@ -329,6 +393,8 @@ spec:
       labels:
         app: prometheus
     spec:
+      securityContext:
+        fsGroup: 65534 # Garante permissão de escrita no volume para o usuário do Prometheus
       containers:
       - name: prometheus
         image: docker.io/prom/prometheus:latest
@@ -338,7 +404,8 @@ spec:
         - "--storage.tsdb.path=/prometheus"
         - "--storage.tsdb.retention.time=24h"
         ports:
-        - containerPort: 9090
+        - name: http
+          containerPort: 9090
         volumeMounts:
         - name: config
           mountPath: /etc/prometheus/prometheus.yml
@@ -349,7 +416,9 @@ spec:
           requests: { cpu: 100m, memory: 256Mi }
           limits:   { cpu: 300m, memory: 512Mi }
         startupProbe:
-          httpGet: { path: /-/ready, port: 9090 }
+          httpGet: 
+            path: /-/ready
+            port: 9090
           failureThreshold: 15
           periodSeconds: 3
       volumes:
@@ -370,9 +439,9 @@ spec:
   selector:
     app: prometheus
   ports:
-  - port: 9090
+  - name: http
+    port: 9090
     targetPort: 9090
-
 ---
 # ==========================================
 # 4. GRAFANA
@@ -419,6 +488,8 @@ spec:
       labels:
         app: grafana
     spec:
+      securityContext:
+        fsGroup: 472 # Permissão necessária para o usuário grafana escrever em /var/lib/grafana
       containers:
       - name: grafana
         image: docker.io/grafana/grafana:latest
@@ -429,17 +500,21 @@ spec:
         - name: GF_USERS_ALLOW_SIGN_UP
           value: "false"
         ports:
-        - containerPort: 3000
+        - name: http
+          containerPort: 3000
         volumeMounts:
         - name: datasources
-          mountPath: /etc/grafana/provisioning/datasources
+          mountPath: /etc/grafana/provisioning/datasources/datasource.yml
+          subPath: datasource.yml
         - name: grafana-data
           mountPath: /var/lib/grafana
         resources:
           requests: { cpu: 200m, memory: 256Mi }
           limits:   { cpu: 500m, memory: 512Mi }
         startupProbe:
-          httpGet: { path: /api/health, port: 3000 }
+          httpGet: 
+            path: /api/health
+            port: 3000
           failureThreshold: 15
           periodSeconds: 3
       volumes:
@@ -460,5 +535,6 @@ spec:
   selector:
     app: grafana
   ports:
-  - port: 3000
+  - name: http
+    port: 3000
     targetPort: 3000

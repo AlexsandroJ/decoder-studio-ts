@@ -2,7 +2,7 @@
  * Estado global do Viewer
  */
 const viewerState = {
-  baseUrl: 'https://localhost:3001/api',
+  baseUrl: 'http://localhost:3001/api',
   isLive: false,
   refreshInterval: 1000,
   refreshTimer: null,

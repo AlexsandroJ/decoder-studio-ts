@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import * as fs from 'fs';
+import path from 'path';
 import * as mqtt from 'mqtt';
 import { v4 as uuid } from 'uuid';
 import { ICanFrame, IUnifiedRecord } from '../types';
@@ -86,7 +87,7 @@ function customPayloadToUnified(payload: CustomPayload): IUnifiedRecord {
   return {
     id: uuid(),
     timestamp: payload.timestamp ?? Date.now(),
-    source: payload.source || 'custom' ,
+    source: payload.source || 'custom',
     customData: payload.customData || payload.data || {},
     tags: payload.tags || ['mqtt-ingestion'],
   };
@@ -130,9 +131,9 @@ async function processCustomData(payloads: CustomPayload[]): Promise<IUnifiedRec
   const saved = await UnifiedDataService.insertMany(records);
 
   //console.log(`✅ CUSTOM: ${saved.length} registro(s) salvo(s)`);
-  
+
   // 'saved' agora é do tipo IUnifiedRecord[], que corresponde exatamente ao retorno da função
-  return saved; 
+  return saved;
 }
 
 /**
@@ -173,20 +174,35 @@ async function processMqttMessage(rawData: any): Promise<void> {
 // ════════════════════════════════════════════════════════
 
 export function connectMQTT(): void {
-  const clientId = `can-gateway-${Math.random().toString(16).substring(2, 10)}`;
+  const clientId = `can-studio-${Math.random().toString(16).substring(2, 10)}`;
+  const isLocal = process.env.MQTT_LOCAL === 'true';
 
-  const options: mqtt.IClientOptions = {
+  let options: mqtt.IClientOptions = {
+    clientId,
     username: process.env.MQTT_USER,
     password: process.env.MQTT_PASSWORD,
-    clientId,
     reconnectPeriod: 3000,
     keepalive: 60,
     clean: true,
-    ca: [fs.readFileSync('./src/certs/emqxsl-ca.crt')], // Se necessário para TLS
-
   };
 
-  console.log(`🔄 Conectando ao broker MQTT: ${MQTT_BROKER}`);
+  // 2. Ajustar opções específicas conforme o ambiente
+  if (isLocal) {
+    console.log(`🔄 Conectando ao broker Local MQTT: ${MQTT_BROKER}`);
+  } else {
+    console.log(`🔄 Conectando ao broker Externo MQTT: ${MQTT_BROKER}`);
+
+    // Tratar a leitura do certificado TLS para evitar crash da aplicação
+    const certPath = path.resolve('./src/certs/emqxsl-ca.crt');
+
+    if (fs.existsSync(certPath)) {
+      options.ca = [fs.readFileSync(certPath)];
+      options.rejectUnauthorized = true; // Garante validação estrita do certificado
+    } else {
+      console.warn(`⚠️ Certificado CA não encontrado em: ${certPath}. Prosseguindo conexão sem certificado customizado.`);
+    }
+  }
+
 
   let client: mqtt.MqttClient | null;
 

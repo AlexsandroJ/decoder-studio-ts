@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc && cp -r src/public dist/",
-    "start": "NODE_ENV=production node dist/server.js",
+    "start": "node dist/server.js",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test": "jest",
