@@ -1,6 +1,6 @@
 {
   "name": "can-sensor-api",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "API unificada para dados CAN e sensores genéricos",
   "main": "dist/server.js",
   "scripts": {
