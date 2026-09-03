@@ -8,7 +8,7 @@ import { IDecodingRule } from "../types";
 export const AimaEnergyRules: IDecodingRule[] = [
   {
     id: "aima_battery_01_current",
-    canId: "0x14",
+    canId: "0x00000014",
     signalName: "BatteryCurrent_01",
     startBit: 0, // Corrente em data[0] e data[1]
     bitLength: 16,
@@ -20,7 +20,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
   {
     id: "aima_battery_01_voltage",
-    canId: "0x14",
+    canId: "0x00000014",
     signalName: "BatteryVoltage_01",
     startBit: 16, // Tensão em data[2] e data[3]
     bitLength: 16,
@@ -32,7 +32,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
   {
     id: "aima_battery_01_soc",
-    canId: "0x14",
+    canId: "0x00000014",
     signalName: "BatterySOC_01",
     startBit: 32, // SOC em data[4]
     bitLength: 8,
@@ -42,10 +42,11 @@ export const AimaEnergyRules: IDecodingRule[] = [
     offset: 0,
     unit: "%"
   },
+  /*
   // Regras idênticas para o CAN ID 0x32A
   {
     id: "aima_battery_02_current",
-    canId: "0x32A",
+    canId: "0x0000032A",
     signalName: "BatteryCurrent_02",
     startBit: 0, // Corrente em data[0] e data[1]
     bitLength: 16,
@@ -57,7 +58,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
   {
     id: "aima_battery_02_voltage",
-    canId: "0x32A",
+    canId: "0x0000032A",
     signalName: "BatteryVoltage_02",
     startBit: 16,  // Tensão em data[2] e data[3]
     bitLength: 16,
@@ -69,7 +70,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
     {
     id: "aima_battery_02_soc",
-    canId: "0x32A",
+    canId: "0x0000032A",
     signalName: "BatterySOC_02",
     startBit: 32, // SOC em data[4]
     bitLength: 8,
@@ -79,13 +80,14 @@ export const AimaEnergyRules: IDecodingRule[] = [
     offset: 0,
     unit: "%"
   },
-  
+  */
 ];
+
 
 export const AimaMotorRules: IDecodingRule[] = [
   {
     id: "aima_motor_rpm",
-    canId: "0x6A0",
+    canId: "0x000006A0",
     signalName: "MotorRPM",
     startBit: 32, // Byte 4 (Big Endian: MSB primeiro)
     bitLength: 16,
@@ -97,7 +99,7 @@ export const AimaMotorRules: IDecodingRule[] = [
   },
   {
     id: "aima_drive_mode",
-    canId: "0x6A1",
+    canId: "0x000006A1",
     signalName: "DriveMode",
     startBit: 0,
     bitLength: 8,
