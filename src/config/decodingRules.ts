@@ -8,7 +8,7 @@ import { IDecodingRule } from "../types";
 export const AimaEnergyRules: IDecodingRule[] = [
   {
     id: "aima_battery_01_current",
-    canId: "0x14",
+    canId: "0x00000014",
     signalName: "BatteryCurrent_01",
     startBit: 0, // Corrente em data[0] e data[1]
     bitLength: 16,
@@ -20,7 +20,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
   {
     id: "aima_battery_01_voltage",
-    canId: "0x14",
+    canId: "0x00000014",
     signalName: "BatteryVoltage_01",
     startBit: 16, // Tensão em data[2] e data[3]
     bitLength: 16,
@@ -32,7 +32,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
   {
     id: "aima_battery_01_soc",
-    canId: "0x14",
+    canId: "0x00000014",
     signalName: "BatterySOC_01",
     startBit: 32, // SOC em data[4]
     bitLength: 8,
@@ -42,10 +42,11 @@ export const AimaEnergyRules: IDecodingRule[] = [
     offset: 0,
     unit: "%"
   },
+  /*
   // Regras idênticas para o CAN ID 0x32A
   {
     id: "aima_battery_02_current",
-    canId: "0x32A",
+    canId: "0x0000032A",
     signalName: "BatteryCurrent_02",
     startBit: 0, // Corrente em data[0] e data[1]
     bitLength: 16,
@@ -57,7 +58,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
   {
     id: "aima_battery_02_voltage",
-    canId: "0x32A",
+    canId: "0x0000032A",
     signalName: "BatteryVoltage_02",
     startBit: 16,  // Tensão em data[2] e data[3]
     bitLength: 16,
@@ -69,7 +70,7 @@ export const AimaEnergyRules: IDecodingRule[] = [
   },
     {
     id: "aima_battery_02_soc",
-    canId: "0x32A",
+    canId: "0x0000032A",
     signalName: "BatterySOC_02",
     startBit: 32, // SOC em data[4]
     bitLength: 8,
@@ -79,25 +80,38 @@ export const AimaEnergyRules: IDecodingRule[] = [
     offset: 0,
     unit: "%"
   },
-  
+  */
 ];
+
 
 export const AimaMotorRules: IDecodingRule[] = [
   {
     id: "aima_motor_rpm",
-    canId: "0x6A0",
+    canId: "0x000006A0",
     signalName: "MotorRPM",
     startBit: 32, // Byte 4 (Big Endian: MSB primeiro)
     bitLength: 16,
     byteOrder: "big",
     signed: false,
-    factor: 0.1,
-    offset: -1600, // Equivalente a (raw - 16000) / 10.0
+    factor: 0.2233,
+    offset: -3572.8, // Equivalente a (raw - 16000) / 10.0
     unit: "rpm"
   },
   {
+    id: "vehicle_speed_calculated_kmh",
+    canId: "0x000006A0",
+    signalName: "VehicleSpeed_Calc",
+    startBit: 32,        // MESMOS bytes do RPM
+    bitLength: 16,
+    byteOrder: "big",
+    signed: false,
+    factor: 0.0222,     // ✅ 0.2233 × 0.0095 ≈ 0.00212
+    offset: -355.2,      // ✅ -3572.8 × 0.0095 ≈ -33.94
+    unit: "km/h"
+  },
+  {
     id: "aima_drive_mode",
-    canId: "0x6A1",
+    canId: "0x000006A1",
     signalName: "DriveMode",
     startBit: 0,
     bitLength: 8,
@@ -127,7 +141,7 @@ export function decodeVoltzEnergy(data: number[]) {
   const raw_current = (data[1] << 8) | data[0];
   const signed_current = raw_current > 32767 ? raw_current - 65536 : raw_current;
   const raw_voltage = (data[3] << 8) | data[2];
-  
+
   return {
     current_amps: (signed_current * 0.01).toFixed(2),
     voltage_volts: (raw_voltage * 0.01).toFixed(2),
@@ -139,7 +153,7 @@ export function decodeVoltzMotor(data: number[]) {
   if (!Array.isArray(data) || data.length < 6) throw new Error("Dados do motor inválidos");
   const raw_rpm = (data[4] << 8) | data[5];
   const motor_rpm = (raw_rpm * 0.1) - 1600;
-  
+
   return {
     motor_rpm: motor_rpm.toFixed(1),
     speed_kmh: (motor_rpm / 4.48).toFixed(1)

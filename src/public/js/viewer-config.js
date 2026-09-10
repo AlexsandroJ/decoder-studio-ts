@@ -432,10 +432,16 @@ function saveWidgetEdit(widgetId) {
   showToast('✅ Widget atualizado');
 }
 
+// Atualize a função deleteWidget para garantir a limpeza:
 function deleteWidget(widgetId) {
   if (!confirm('Remover este widget?')) return;
   viewerState.widgets = viewerState.widgets.filter(w => w.id !== widgetId);
-  if(viewerState.valueHistory) delete viewerState.valueHistory[widgetId];
+  
+  // Limpeza garantida do histórico
+  if (viewerState.valueHistory && viewerState.valueHistory[widgetId]) {
+    delete viewerState.valueHistory[widgetId];
+  }
+  
   saveViewerState();
   renderWidgets();
   closeEditPanel();
@@ -469,6 +475,7 @@ function saveCurrentConfig() {
   loadSavedConfigsList();
 }
 
+// Adicione esta limpeza ao carregar uma configuração salva:
 function loadSavedConfig() {
   const configs = JSON.parse(localStorage.getItem('viewer-configs') || '{}');
   const names = Object.keys(configs);
@@ -479,6 +486,14 @@ function loadSavedConfig() {
   const name = prompt('Qual configuração carregar?\n\n' + names.join('\n'));
   if (name && configs[name]) {
     viewerState.widgets = configs[name].widgets;
+    
+    // 🧹 LIMPEZA: Remove do histórico qualquer widget que não esteja mais na lista
+    Object.keys(viewerState.valueHistory).forEach(histId => {
+      if (!viewerState.widgets.find(w => w.id === histId)) {
+        delete viewerState.valueHistory[histId];
+      }
+    });
+    
     saveViewerState();
     renderWidgets();
     showToast(`📂 Configuração "${name}" carregada`);

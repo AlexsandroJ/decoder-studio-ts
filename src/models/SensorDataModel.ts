@@ -38,8 +38,7 @@ const sensorDataSchema = new Schema<ISensorData>(
     timestamp: {
       type: Number,
       required: true,
-      index: true,
-      default: Date.now
+      index: true
     },
     metadata: {
       type: Schema.Types.Mixed

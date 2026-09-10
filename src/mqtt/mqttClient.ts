@@ -1,4 +1,3 @@
-
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -6,17 +5,15 @@ import * as fs from 'fs';
 import path from 'path';
 import * as mqtt from 'mqtt';
 import { v4 as uuid } from 'uuid';
-import { ICanFrame, IUnifiedRecord } from '../types';
+import { ICanFrame, IUnifiedRecord, ISensorData } from '../types'; // ✅ NOVO: Adicionado ISensorData
 import CanFrameModel from '../models/CanFrameModel';
-import UnifiedDataService from '../services/UnifiedDataService';
+import UnifiedDataService from '../services/UnifiedDataService'; // ⚠️ Verifique se o caminho ainda é este ou se mudou para '../models/UnifiedDataModel'
+import { SensorDataService } from '../models/SensorDataModel';   // ✅ NOVO: Import do serviço de Sensor
 
 // ════════════════════════════════════════════════════════
 //  TIPOS
 // ════════════════════════════════════════════════════════
 
-/**
- * Payload CAN (estrutura conhecida)
- */
 interface CanPayload {
   deviceId?: string;
   canId: string;
@@ -26,29 +23,36 @@ interface CanPayload {
   interface?: string;
 }
 
-/**
- * Payload Customizado (estrutura arbitrária)
- */
+// ✅ NOVO: Payload de Sensor (baseado no seu Schema/Controller)
+interface SensorPayload {
+  id?: string;
+  sensorId: string;
+  sensorType?: string;
+  value: any; // number, string, boolean, ou object
+  unit?: string;
+  timestamp?: number;
+  metadata?: Record<string, any>;
+  deviceId?: string;
+}
+
 interface CustomPayload {
   source: string;
   data?: Record<string, any>;
   customData?: Record<string, any>;
   timestamp?: number;
   tags?: string[];
-  [key: string]: any; // Permite qualquer campo extra
+  [key: string]: any;
 }
 
-/**
- * Tipo union para qualquer payload MQTT
- */
-type MqttPayload = CanPayload | CustomPayload;
+type MqttPayload = CanPayload | SensorPayload | CustomPayload;
 
 // ════════════════════════════════════════════════════════
 //  CONFIGURAÇÃO
 // ════════════════════════════════════════════════════════
 
 const MQTT_BROKER = process.env.MQTT_BROKER || 'mqtt://localhost:1883';
-const MQTT_TOPIC = process.env.MQTT_TOPIC || 'can/data';
+// ✅ DICA: Você pode usar um array de tópicos se quiser separar, ex: ['can/data', 'sensors/data']
+const MQTT_TOPIC = process.env.MQTT_TOPIC || 'can/data'; 
 
 let client: mqtt.MqttClient | null = null;
 
@@ -56,11 +60,13 @@ let client: mqtt.MqttClient | null = null;
 //  FUNÇÕES DE DETECÇÃO E CONVERSÃO
 // ════════════════════════════════════════════════════════
 
-/**
- * Detecta se o payload é um frame CAN ou dado customizado
- */
 function isCanPayload(payload: any): payload is CanPayload {
   return typeof payload === 'object' && payload !== null && payload.canId !== undefined && payload.data !== undefined;
+}
+
+// ✅ NOVO: Detecta se o payload é um dado de Sensor
+function isSensorPayload(payload: any): payload is SensorPayload {
+  return typeof payload === 'object' && payload !== null && payload.sensorId !== undefined && payload.value !== undefined;
 }
 
 function canPayloadToFrame(payload: CanPayload): ICanFrame {
@@ -80,9 +86,6 @@ function canPayloadToFrame(payload: CanPayload): ICanFrame {
   };
 }
 
-/**
- * Converte payload customizado para IUnifiedRecord
- */
 function customPayloadToUnified(payload: CustomPayload): IUnifiedRecord {
   return {
     id: uuid(),
@@ -97,9 +100,6 @@ function customPayloadToUnified(payload: CustomPayload): IUnifiedRecord {
 //  PROCESSAMENTO
 // ════════════════════════════════════════════════════════
 
-/**
- * Processa e salva frames CAN
- */
 async function processCanFrames(payloads: CanPayload[]): Promise<ICanFrame[]> {
   const frames: ICanFrame[] = payloads.map(canPayloadToFrame);
 
@@ -108,10 +108,7 @@ async function processCanFrames(payloads: CanPayload[]): Promise<ICanFrame[]> {
     throw new Error(`${invalid.length} frame(s) CAN inválido(s)`);
   }
 
-  // Salva no banco
   const saved = await CanFrameModel.insertMany(frames);
-
-  // ✅ CORREÇÃO: Usa o serviço unificado com await
   const UnifiedDataProcessor = (await import("../services/UnifiedDataService")).default;
   const unified = await UnifiedDataProcessor.ingestCanFrames(saved);
 
@@ -119,49 +116,83 @@ async function processCanFrames(payloads: CanPayload[]): Promise<ICanFrame[]> {
   return saved;
 }
 
-/**
- * Processa e salva dados customizados
- */
+// ✅ NOVO: Processa e salva dados de Sensores vindos do MQTT
+async function processSensorData(payloads: SensorPayload[]): Promise<ISensorData[]> {
+  // 1. Normalização segura (espelhando a lógica exata do seu Controller)
+  const readings: Partial<ISensorData>[] = payloads.map((s: any) => ({
+    id: s.id || uuid(),
+    sensorId: String(s.sensorId),
+    sensorType: String(s.sensorType || "generic"),
+    value: s.value,
+    unit: s.unit ? String(s.unit) : undefined,
+    timestamp: s.timestamp || Date.now(),
+    metadata: s.metadata || undefined,
+    deviceId: s.deviceId ? String(s.deviceId) : undefined
+  }));
+
+  // 2. Validação estrita
+  const invalid = readings.filter(r => !r.sensorId);
+  if (invalid.length > 0) {
+    throw new Error(`${invalid.length} leitura(s) de sensor inválida(s): 'sensorId' é obrigatório.`);
+  }
+
+  // 3. Salvamento no modelo de Sensores
+  const saved = await SensorDataService.insertMany(readings);
+
+  // 4. Mapeamento para o formato Unificado (IUnifiedRecord)
+  const unifiedRecords: Partial<IUnifiedRecord>[] = saved.map((s: any) => ({
+    id: uuid(),
+    timestamp: s.timestamp,
+    source: "sensor",
+    sensorReadings: [{
+      id: s.id,
+      sensorId: s.sensorId,
+      sensorType: s.sensorType,
+      value: s.value,
+      unit: s.unit,
+      timestamp: s.timestamp
+    }],
+    tags: s.metadata ? ["has_metadata", "mqtt-sensor"] : ["mqtt-sensor"]
+  }));
+
+  await UnifiedDataService.insertMany(unifiedRecords);
+
+  console.log(`✅ SENSOR: ${saved.length} leitura(s) processada(s) e unificada(s)`);
+  return saved as ISensorData[];
+}
+
 async function processCustomData(payloads: CustomPayload[]): Promise<IUnifiedRecord[]> {
   const records: IUnifiedRecord[] = payloads.map(customPayloadToUnified);
-
-  // ✅ CORREÇÃO: 
-  // 1. Usamos insertMany para salvar tudo de uma vez (mais rápido).
-  // 2. Usamos await para esperar a Promise resolver e retornar o array real.
   const saved = await UnifiedDataService.insertMany(records);
-
-  //console.log(`✅ CUSTOM: ${saved.length} registro(s) salvo(s)`);
-
-  // 'saved' agora é do tipo IUnifiedRecord[], que corresponde exatamente ao retorno da função
   return saved;
 }
 
-/**
- * Roteiriza o payload para o processador correto
- */
+// ✅ ATUALIZADO: Roteiriza o payload para o processador correto (agora inclui sensores)
 async function processMqttMessage(rawData: any): Promise<void> {
-  // Suporta array ou objeto único
   const payloads: any[] = Array.isArray(rawData) ? rawData : [rawData];
 
-  // Separa por tipo
   const canPayloads: CanPayload[] = [];
+  const sensorPayloads: SensorPayload[] = []; // ✅ NOVO
   const customPayloads: CustomPayload[] = [];
 
   payloads.forEach(p => {
     if (isCanPayload(p)) {
       canPayloads.push(p);
+    } else if (isSensorPayload(p)) { // ✅ NOVO
+      sensorPayloads.push(p);
     } else {
       customPayloads.push(p);
     }
   });
 
-  // Processa em paralelo
   const promises: Promise<any>[] = [];
 
   if (canPayloads.length > 0) {
     promises.push(processCanFrames(canPayloads));
   }
-
+  if (sensorPayloads.length > 0) { // ✅ NOVO
+    promises.push(processSensorData(sensorPayloads));
+  }
   if (customPayloads.length > 0) {
     promises.push(processCustomData(customPayloads));
   }
@@ -186,31 +217,24 @@ export function connectMQTT(): void {
     clean: true,
   };
 
-  // 2. Ajustar opções específicas conforme o ambiente
   if (isLocal) {
     console.log(`🔄 Conectando ao broker Local MQTT: ${MQTT_BROKER}`);
   } else {
     console.log(`🔄 Conectando ao broker Externo MQTT: ${MQTT_BROKER}`);
-
-    // Tratar a leitura do certificado TLS para evitar crash da aplicação
     const certPath = path.resolve('./src/certs/emqxsl-ca.crt');
 
     if (fs.existsSync(certPath)) {
       options.ca = [fs.readFileSync(certPath)];
-      options.rejectUnauthorized = true; // Garante validação estrita do certificado
+      options.rejectUnauthorized = true;
     } else {
       console.warn(`⚠️ Certificado CA não encontrado em: ${certPath}. Prosseguindo conexão sem certificado customizado.`);
     }
   }
 
-
-  let client: mqtt.MqttClient | null;
-
   client = mqtt.connect(MQTT_BROKER, options);
 
   client.on('connect', () => {
     console.log(`✅ Conectado ao broker MQTT: ${MQTT_BROKER}`);
-
     client.subscribe(MQTT_TOPIC, (err) => {
       if (err) {
         console.error(`❌ Falha ao subscrever tópico ${MQTT_TOPIC}:`, err);
@@ -221,17 +245,15 @@ export function connectMQTT(): void {
   });
 
   client.on('message', async (topic, message) => {
-    if (topic === MQTT_TOPIC) {
-      try {
-        const payloadStr = message.toString();
-        const rawData = JSON.parse(payloadStr);
+    try {
+      const payloadStr = message.toString();
+      const rawData = JSON.parse(payloadStr);
 
-        await processMqttMessage(rawData);
+      await processMqttMessage(rawData);
 
-      } catch (error: any) {
-        console.error('❌ Erro ao processar mensagem MQTT:', error.message);
-        console.error('📦 Payload bruto:', message.toString());
-      }
+    } catch (error: any) {
+      console.error('❌ Erro ao processar mensagem MQTT:', error.message);
+      console.error('📦 Payload bruto:', message.toString());
     }
   });
 
