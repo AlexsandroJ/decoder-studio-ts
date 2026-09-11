@@ -1,116 +1,396 @@
-/**
- * 🚗 Mock CAN Data Generator - 100% Compatível com o Firmware Arduino
- * Execução: node mock-can-data.js
- */
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-const API_URL = process.env.API_URL || 'https://localhost:3001/api';
-const INTERVAL_MS = parseInt(process.env.INTERVAL_MS || '800', 10);
+// ════════════════════════════════════════════════════════
+//  SIMULADOR DE DADOS CAN / SENSORES
+//  Uso: node simulator.js
+// ════════════════════════════════════════════════════════
 
+const API_URL = process.env.API_URL || 'http://localhost:3001/api';
+
+// ════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-const toHexByte = (num) => (num & 0xFF).toString(16).toUpperCase().padStart(2, '0');
-const buildHexData = (bytes) => bytes.map(toHexByte).join('');
-const formatHexWithSpaces = (hexStr) => hexStr.match(/.{1,2}/g).join(' ');
+const randomFloat = (min, max, decimals = 2) => 
+  parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
 
-/**
- * Simulador e Validador exatamente igual ao C++:
- * data[1] << 8 | data[0] -> raw_current / 100.0
- * data[3] << 8 | data[2] -> raw_voltage / 100.0
- * data[4] -> soc_percent
- */
-function generateEnergyFrame(canId) {
-  const isBms1 = canId === '0x14';
-  const suffix = isBms1 ? '_01' : '_02';
+const generateId = () => `sim_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-  // 1. Corrente: Amperes -> int16_t (ex: -12.34 A -> raw -1234)
-  const currentAmp = randomInt(-5000, 5000) / 100;
-  const rawCurrentInt16 = Math.round(currentAmp * 100);
-
-  // 2. Tensão: Volts -> uint16_t (ex: 350.25 V -> raw 35025)
-  const voltageV = randomInt(30000, 40000) / 100;
-  const rawVoltageUint16 = Math.round(voltageV * 100);
-
-  // 3. SOC: uint8_t
-  const socPercent = randomInt(0, 100);
-
-  // Extração dos bytes individuais (Little-Endian)
-  const data0 = rawCurrentInt16 & 0xFF;         // Current LSB
-  const data1 = (rawCurrentInt16 >> 8) & 0xFF;  // Current MSB
-  const data2 = rawVoltageUint16 & 0xFF;        // Voltage LSB
-  const data3 = (rawVoltageUint16 >> 8) & 0xFF; // Voltage MSB
-  const data4 = socPercent;                     // SOC
-
-  const bytes = [data0, data1, data2, data3, data4, 0, 0, 0];
-
-  // ════════════════════════════════════════════════════════
-  // SIMULAÇÃO DO CÓDIGO C++ DO ARDUINO PARA VALIDAÇÃO
-  // ════════════════════════════════════════════════════════
-  // int16_t raw_current = (int16_t)(data[1] << 8 | data[0]);
-  const cppRawCurrent = new Int16Array([ (data1 << 8) | data0 ])[0];
-  const cppCurrentAmps = (cppRawCurrent / 100.0).toFixed(2);
-
-  // uint16_t raw_voltage = (data[3] << 8 | data[2]);
-  const cppRawVoltage = (data3 << 8) | data2;
-  const cppVoltageVolts = (cppRawVoltage / 100.0).toFixed(2);
-
-  // uint8_t soc_percent = data[4];
-  const cppSocPercent = data4;
-
-  return {
-    frame: { canId, dlc: 8, data: buildHexData(bytes), timestamp: Date.now() },
-    arduinoValidation: {
-      serialOutput: `Bat: ${cppVoltageVolts}V | Corrente: ${cppCurrentAmps}A | SOC: ${cppSocPercent}%`,
-      bytesUsed: `data[0]=0x${toHexByte(data0)}, data[1]=0x${toHexByte(data1)}, data[2]=0x${toHexByte(data2)}, data[3]=0x${toHexByte(data3)}, data[4]=0x${toHexByte(data4)}`,
-      signals: [
-        { signal: `BatteryCurrent${suffix}`, val: `${cppCurrentAmps} A` },
-        { signal: `BatteryVoltage${suffix}`, val: `${cppVoltageVolts} V` },
-        { signal: `BatterySOC${suffix}`,     val: `${cppSocPercent} %` }
-      ]
-    }
-  };
-}
-
-async function sendFrame(frame) {
+async function send(endpoint, data) {
   try {
-    const res = await fetch(`${API_URL}/can/frames`, {
+    const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(frame)
+      body: JSON.stringify(data)
     });
-    return res.ok ? { success: true, status: res.status } : { success: false, status: res.status, error: await res.text() };
+    const json = await res.json();
+    return { ok: res.ok, data: json };
   } catch (err) {
-    return { success: false, error: err.cause?.message || err.message };
+    console.error(` Erro em ${endpoint}:`, err.message);
+    return { ok: false, error: err.message };
   }
 }
 
-async function startSimulation() {
-  console.clear();
-  console.log('════════════════════════════════════════════════════════════════════════════════');
-  console.log('🚀 SIMULADOR CAN - VERIFICAÇÃO 100% FIÉL AO ARDUINO');
-  console.log('════════════════════════════════════════════════════════════════════════════════');
-
-  const generators = [
-    () => generateEnergyFrame('0x14'),
-    () => generateEnergyFrame('0x32A')
+// ════════════════════════════════════════════════════════
+//  1. REGRAS DE DECODIFICAÇÃO (CAN Signals)
+// ═══════════════════════════════════════════════════════
+async function sendDecodingRules() {
+  console.log('\n📏 Enviando regras de decodificação...');
+  
+  const rules = [
+    {
+      id: 'rule_rpm',
+      canId: '0x1A3',
+      signalName: 'EngineRPM',
+      startBit: 0,
+      bitLength: 16,
+      byteOrder: 'little',
+      signed: false,
+      factor: 0.25,
+      offset: 0,
+      unit: 'rpm',
+      minValue: 0,
+      maxValue: 8000
+    },
+    {
+      id: 'rule_temp',
+      canId: '0x1A3',
+      signalName: 'EngineTemp',
+      startBit: 16,
+      bitLength: 16,
+      byteOrder: 'little',
+      signed: true,
+      factor: 0.1,
+      offset: -40,
+      unit: '°C',
+      minValue: -40,
+      maxValue: 215
+    },
+    {
+      id: 'rule_speed',
+      canId: '0x2B4',
+      signalName: 'VehicleSpeed',
+      startBit: 0,
+      bitLength: 8,
+      byteOrder: 'big',
+      signed: false,
+      factor: 1,
+      offset: 0,
+      unit: 'km/h',
+      minValue: 0,
+      maxValue: 255
+    },
+    {
+      id: 'rule_fuel',
+      canId: '0x2B4',
+      signalName: 'FuelLevel',
+      startBit: 8,
+      bitLength: 8,
+      byteOrder: 'big',
+      signed: false,
+      factor: 100 / 255,
+      offset: 0,
+      unit: '%',
+      minValue: 0,
+      maxValue: 100
+    },
+    {
+      id: 'rule_battery',
+      canId: '0x3C5',
+      signalName: 'BatteryVoltage',
+      startBit: 0,
+      bitLength: 16,
+      byteOrder: 'little',
+      signed: false,
+      factor: 0.1,
+      offset: 0,
+      unit: 'V',
+      minValue: 0,
+      maxValue: 16
+    }
   ];
 
-  let frameCount = 0;
-
-  while (true) {
-    frameCount++;
-    const randomGenerator = generators[randomInt(0, generators.length - 1)];
-    const { frame, arduinoValidation } = randomGenerator();
-    
-    const sendResult = await sendFrame(frame);
-    const statusTag = sendResult.success ? `\x1b[32m[HTTP ${sendResult.status} OK]\x1b[0m` : `\x1b[31m[ERRO]\x1b[0m`;
-
-    console.log(`\x1b[36m#${frameCount.toString().padStart(4, '0')}\x1b[0m | ID: \x1b[33m${frame.canId.padEnd(6)}\x1b[0m | ${statusTag}`);
-    console.log(`   └─ 📦 Bytes CAN : [ \x1b[35m${formatHexWithSpaces(frame.data)}\x1b[0m ]`);
-    console.log(`      ├── 🤖 Serial.printf Arduino : "\x1b[32m${arduinoValidation.serialOutput}\x1b[0m"`);
-    console.log(`      └── 🔍 Mapeamento             : ${arduinoValidation.bytesUsed}`);
-    console.log('─'.repeat(80));
-
-    await new Promise(resolve => setTimeout(resolve, INTERVAL_MS));
-  }
+  const result = await send('/decoding/rules', rules);
+  console.log(result.ok ? `✅ ${rules.length} regras enviadas` : '❌ Falha');
+  return result.ok;
 }
 
-startSimulation();
+// ════════════════════════════════════════════════════════
+//  2. FRAMES CAN (dados hex brutos)
+// ════════════════════════════════════════════════════════
+function generateCANFrame() {
+  // Gera bytes aleatórios que formam valores realistas
+  const rpm = randomInt(800, 6500);
+  const temp = randomInt(-10, 120);
+  const speed = randomInt(0, 180);
+  const fuel = randomInt(0, 100);
+  const voltage = randomFloat(11.5, 14.8, 1);
+
+  // Codifica em hex (little endian para 0x1A3)
+  const rpmHex = Math.round(rpm / 0.25).toString(16).padStart(4, '0');
+  const tempHex = Math.round((temp + 40) / 0.1).toString(16).padStart(4, '0');
+  const speedHex = speed.toString(16).padStart(2, '0');
+  const fuelHex = Math.round(fuel * 255 / 100).toString(16).padStart(2, '0');
+  const voltHex = Math.round(voltage / 0.1).toString(16).padStart(4, '0');
+
+  const frames = [
+    {
+      id: generateId(),
+      canId: '0x1A3',
+      dlc: 8,
+      data: `${rpmHex}${tempHex}00000000`,
+      timestamp: Date.now(),
+      interface: 'http'
+    },
+    {
+      id: generateId(),
+      canId: '0x2B4',
+      dlc: 8,
+      data: `${speedHex}${fuelHex}00000000`,
+      timestamp: Date.now(),
+      interface: 'http'
+    },
+    {
+      id: generateId(),
+      canId: '0x3C5',
+      dlc: 8,
+      data: `${voltHex}000000000000`,
+      timestamp: Date.now(),
+      interface: 'http'
+    }
+  ];
+
+  return frames;
+}
+
+async function sendCANFrames() {
+  const frames = generateCANFrame();
+  const results = await Promise.all(frames.map(f => send('/can/frames', f)));
+  const ok = results.filter(r => r.ok).length;
+  console.log(`📡 ${ok}/${frames.length} frames CAN enviados`);
+}
+
+// ════════════════════════════════════════════════════════
+//  3. SENSORES (incluindo estruturas complexas!)
+// ════════════════════════════════════════════════════════
+function generateSensors() {
+  const now = Date.now();
+  
+  return [
+    // Sensor simples (número)
+    {
+      id: generateId(),
+      sensorId: 'temp-outdoor',
+      sensorType: 'temperature',
+      value: randomFloat(-10, 45, 1),
+      unit: '°C',
+      timestamp: now,
+      metadata: { location: 'outdoor', zone: 'A' }
+    },
+    
+    // Sensor com valor objeto (para testar FieldExplorer)
+    {
+      id: generateId(),
+      sensorId: 'engine-monitor',
+      sensorType: 'multi-parameter',
+      value: {
+        temperature: {
+          current: randomFloat(70, 120, 1),
+          max: 130,
+          min: 60,
+          unit: '°C',
+          status: randomInt(0, 100) > 80 ? 'warning' : 'normal'
+        },
+        pressure: {
+          value: randomFloat(1.5, 3.5, 2),
+          unit: 'bar',
+          trend: ['stable', 'rising', 'falling'][randomInt(0, 2)]
+        },
+        rpm: randomInt(800, 6500),
+        load: randomFloat(0, 100, 1)
+      },
+      unit: 'mixed',
+      timestamp: now,
+      metadata: {
+        ecu: 'ECU-01',
+        vin: '1HGBH41JXMN109186',
+        location: { building: 'A', floor: 2, room: 'engine-bay' }
+      }
+    },
+    
+    // Sensor com array (para testar arrays no explorer)
+    {
+      id: generateId(),
+      sensorId: 'gps-tracker',
+      sensorType: 'location',
+      value: {
+        coordinates: [randomFloat(-90, 90, 6), randomFloat(-180, 180, 6)],
+        altitude: randomFloat(0, 1000, 1),
+        speed: randomFloat(0, 200, 1),
+        satellites: randomInt(6, 14),
+        history: [
+          { lat: randomFloat(-90, 90, 4), lng: randomFloat(-180, 180, 4), ts: now - 3000 },
+          { lat: randomFloat(-90, 90, 4), lng: randomFloat(-180, 180, 4), ts: now - 2000 },
+          { lat: randomFloat(-90, 90, 4), lng: randomFloat(-180, 180, 4), ts: now - 1000 }
+        ]
+      },
+      unit: 'mixed',
+      timestamp: now,
+      metadata: { provider: 'GPS', accuracy: 'high' }
+    },
+    
+    // Sensor booleano/estado
+    {
+      id: generateId(),
+      sensorId: 'door-status',
+      sensorType: 'binary',
+      value: randomInt(0, 1) === 1,
+      unit: 'bool',
+      timestamp: now,
+      metadata: { zone: 'entrance' }
+    },
+    
+    // Sensor de bateria com estrutura rica
+    {
+      id: generateId(),
+      sensorId: 'battery-pack',
+      sensorType: 'battery',
+      value: {
+        voltage: randomFloat(11.5, 14.8, 2),
+        current: randomFloat(-50, 150, 1),
+        charge: randomFloat(0, 100, 1),
+        health: randomFloat(70, 100, 1),
+        temperature: randomFloat(20, 60, 1),
+        cells: [
+          { id: 1, voltage: randomFloat(3.2, 4.2, 2), temp: randomFloat(20, 50, 1) },
+          { id: 2, voltage: randomFloat(3.2, 4.2, 2), temp: randomFloat(20, 50, 1) },
+          { id: 3, voltage: randomFloat(3.2, 4.2, 2), temp: randomFloat(20, 50, 1) },
+          { id: 4, voltage: randomFloat(3.2, 4.2, 2), temp: randomFloat(20, 50, 1) }
+        ]
+      },
+      unit: 'mixed',
+      timestamp: now,
+      metadata: { packId: 'PACK-001', chemistry: 'LiFePO4' }
+    },
+    
+    // Sensor de texto/string
+    {
+      id: generateId(),
+      sensorId: 'error-log',
+      sensorType: 'diagnostic',
+      value: {
+        code: `P${randomInt(0, 9)}${randomInt(100, 999)}`,
+        message: ['Engine misfire', 'O2 sensor fault', 'Low pressure', 'Normal'][randomInt(0, 3)],
+        severity: ['info', 'warning', 'critical'][randomInt(0, 2)],
+        count: randomInt(0, 50)
+      },
+      unit: 'text',
+      timestamp: now,
+      metadata: { obd: true }
+    }
+  ];
+}
+
+async function sendSensors() {
+  const sensors = generateSensors();
+  const results = await Promise.all(sensors.map(s => send('/sensors', s)));
+  const ok = results.filter(r => r.ok).length;
+  console.log(`🌡️  ${ok}/${sensors.length} sensores enviados`);
+}
+
+// ════════════════════════════════════════════════════════
+//  4. DADOS UNIFIED (merge de CAN + Sensores)
+// ════════════════════════════════════════════════════════
+async function sendUnified() {
+  const record = {
+    id: generateId(),
+    timestamp: Date.now(),
+    source: 'merged',
+    canSignals: [
+      { ruleId: 'rule_rpm', signalName: 'EngineRPM', value: randomInt(800, 6500), unit: 'rpm', rawHex: '0A2B', timestamp: Date.now() },
+      { ruleId: 'rule_temp', signalName: 'EngineTemp', value: randomFloat(70, 120, 1), unit: '°C', rawHex: '03E8', timestamp: Date.now() }
+    ],
+    sensorReadings: [
+      { id: generateId(), sensorId: 'temp-outdoor', sensorType: 'temperature', value: randomFloat(-10, 45, 1), unit: '°C', timestamp: Date.now() }
+    ],
+    tags: ['engine', 'live', 'simulated']
+  };
+
+  const result = await send('/unified', record);
+  console.log(result.ok ? ' 1 registro unified enviado' : '❌ Unified falhou');
+}
+
+// ════════════════════════════════════════════════════════
+//  5. LIMPAR DADOS (útil para testes)
+// ═══════════════════════════════════════════════════════
+async function clearAll() {
+  console.log('\n🗑️  Limpando dados...');
+  await Promise.all([
+    fetch(`${API_URL}/can/frames`, { method: 'DELETE' }),
+    fetch(`${API_URL}/sensors`, { method: 'DELETE' }),
+    fetch(`${API_URL}/unified`, { method: 'DELETE' }),
+    fetch(`${API_URL}/decoding/rules`, { method: 'DELETE' })
+  ]);
+  console.log('✅ Dados limpos');
+}
+
+// ════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ════════════════════════════════════════════════════════
+async function main() {
+  const args = process.argv.slice(2);
+  const mode = args[0] || 'loop';
+  const interval = parseInt(args[1]) || 1000;
+
+  console.log('╔══════════════════════════════════════════╗');
+  console.log('║    CAN Data Simulator                  ║');
+  console.log('╚══════════════════════════════════════════╝');
+  console.log(`📡 API: ${API_URL}`);
+  console.log(`🎯 Modo: ${mode}`);
+
+  // Verifica saúde da API
+  try {
+    const health = await fetch(`${API_URL}/health`).then(r => r.json());
+    console.log(`❤️  API Online (uptime: ${health.uptime?.toFixed(1)}s)\n`);
+  } catch {
+    console.log('❌ API offline! Verifique se está rodando em ' + API_URL);
+    process.exit(1);
+  }
+
+  // Envia regras uma única vez
+  await sendDecodingRules();
+
+  if (mode === 'clear') {
+    await clearAll();
+    return;
+  }
+
+  if (mode === 'once') {
+    console.log('\n Enviando dados únicos...');
+    await sendCANFrames();
+    await sendSensors();
+    await sendUnified();
+    console.log('\n✅ Concluído!');
+    return;
+  }
+
+  // Modo loop contínuo
+  console.log(`\n🔄 Enviando dados a cada ${interval}ms (Ctrl+C para parar)\n`);
+  
+  let tick = 0;
+  setInterval(async () => {
+    tick++;
+    await sendCANFrames();
+    await sendSensors();
+    
+    // Unified a cada 3 ticks para não sobrecarregar
+    if (tick % 3 === 0) await sendUnified();
+    
+    if (tick % 10 === 0) {
+      console.log(`   └─ tick #${tick}`);
+    }
+  }, interval);
+}
+
+main().catch(err => {
+  console.error('💥 Erro fatal:', err);
+  process.exit(1);
+});

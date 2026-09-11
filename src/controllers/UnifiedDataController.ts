@@ -3,6 +3,49 @@ import { IApiResponse, IUnifiedRecord } from "../types";
 import { UnifiedDataService } from "../models/UnifiedDataModel";
 
 class UnifiedDataController {
+    /**
+   * POST /api/unified
+   * Ingestão de um registro unificado
+   */
+  ingest = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
+    try {
+      const payload = req.body;
+
+      if (!payload || !payload.source) {
+        res.status(400).json({ 
+          success: false, 
+          error: "Payload inválido. O campo 'source' é obrigatório." 
+        });
+        return;
+      }
+
+      // Chama o método ingest que acabamos de criar no serviço
+      const savedRecord = await UnifiedDataService.ingest(payload);
+
+      res.status(201).json({
+        success: true,
+        data: savedRecord,
+        //message: "Registro unificado ingerido com sucesso."
+      });
+    } catch (err: any) {
+      console.error("❌ Erro ao ingerir dado unificado:", err);
+      
+      // Erro de chave duplicada no MongoDB (id único)
+      if (err.code === 11000) {
+        res.status(409).json({ 
+          success: false, 
+          error: "Já existe um registro com este ID." 
+        });
+        return;
+      }
+
+      res.status(500).json({ 
+        success: false, 
+        error: err.message || "Erro interno ao processar registro unificado." 
+      });
+    }
+  };
+
   /**
    * GET /api/unified
    */
@@ -62,14 +105,10 @@ class UnifiedDataController {
 
   /**
    * POST /api/unified/merge
-   * Funde registros de CAN e Sensor que estejam dentro da mesma janela de tempo.
-   * Body: { "windowMs": 500 }
    */
   merge = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
     try {
-      const windowMs = req.body?.windowMs ?? 1000; // Padrão de 1 segundo
-      
-      // Chama o serviço que contém a lógica de agrupamento por timestamp
+      const windowMs = req.body?.windowMs ?? 1000;
       const mergedData = await UnifiedDataService.mergeByTimeWindow(windowMs);
 
       res.status(200).json({

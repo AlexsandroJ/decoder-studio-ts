@@ -7,6 +7,24 @@ import { UnifiedDataService as UnifiedModelService } from "../models/UnifiedData
 class UnifiedDataService {
 
   /**
+   * Ingestão de um único registro unificado (usado pela API POST /unified)
+   */
+  async ingest(record: Partial<IUnifiedRecord>): Promise<IUnifiedRecord> {
+    // Normaliza os dados para garantir que o Schema do MongoDB não reclame
+    const normalized: Partial<IUnifiedRecord> = {
+      id: record.id || uuid(),
+      timestamp: record.timestamp || Date.now(),
+      source: record.source || "custom",
+      canSignals: Array.isArray(record.canSignals) ? record.canSignals : [],
+      sensorReadings: Array.isArray(record.sensorReadings) ? record.sensorReadings : [],
+      customData: record.customData || {},
+      tags: Array.isArray(record.tags) ? record.tags : [],
+    };
+
+    // Chama o método 'insert' que já existe no seu modelo (UnifiedModelService)
+    return await UnifiedModelService.insert(normalized);
+  }
+  /**
    * Recebe leituras de sensores e armazena como unified records.
    */
 async ingestCanFrames(frames: ICanFrame[]): Promise<IUnifiedRecord[]> {

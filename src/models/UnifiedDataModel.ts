@@ -83,6 +83,26 @@ const unifiedDataSchema = new Schema<IUnifiedRecord>(
 const UnifiedDataModel = mongoose.model<IUnifiedRecord>('UnifiedData', unifiedDataSchema);
 
 export const UnifiedDataService = {
+
+  /**
+   * NOVO: Método dedicado para ingestão via API POST /unified
+   * Normaliza os dados para evitar erros de validação do Mongoose
+   */
+  async ingest(record: Partial<IUnifiedRecord>): Promise<IUnifiedRecord> {
+    const normalized: Partial<IUnifiedRecord> = {
+      id: record.id || `unified_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: record.timestamp || Date.now(),
+      source: record.source || 'custom',
+      canSignals: Array.isArray(record.canSignals) ? record.canSignals : [],
+      sensorReadings: Array.isArray(record.sensorReadings) ? record.sensorReadings : [],
+      customData: record.customData || {},
+      tags: Array.isArray(record.tags) ? record.tags : [],
+    };
+    
+    // Reutiliza o seu método insert que já funciona perfeitamente
+    return await this.insert(normalized);
+  },
+  
   async insert(record: Partial<IUnifiedRecord>): Promise<IUnifiedRecord> {
     return await UnifiedDataModel.create(record);
   },
