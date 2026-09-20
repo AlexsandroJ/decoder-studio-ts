@@ -54,6 +54,55 @@ class DecodingController {
     }
   };
 
+
+  /**
+   * PUT /api/decoding/rules/:id
+   */
+  update = async (req: Request, res: Response<IApiResponse>): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const r = req.body;
+
+      if (!id) {
+        res.status(400).json({ success: false, error: "ID da regra é obrigatório na URL." });
+        return;
+      }
+
+      // Prepara os dados (sem incluir o 'id' no objeto de update, pois a busca já é por ele)
+      const ruleData: Partial<IDecodingRule> = {
+        canId: String(r.canId),
+        signalName: String(r.signalName),
+        startBit: Number(r.startBit),
+        bitLength: Number(r.bitLength),
+        byteOrder: r.byteOrder === "little" ? "little" : "big",
+        signed: Boolean(r.signed),
+        factor: Number(r.factor) || 1,
+        offset: Number(r.offset) || 0,
+        unit: String(r.unit || ""),
+        minValue: r.minValue !== undefined && r.minValue !== "" && !isNaN(Number(r.minValue)) 
+          ? Number(r.minValue) 
+          : undefined,
+        maxValue: r.maxValue !== undefined && r.maxValue !== "" && !isNaN(Number(r.maxValue)) 
+          ? Number(r.maxValue) 
+          : undefined,
+      };
+
+      // 🔥 Chama o seu Service atualizado
+      const updatedRule = await DecodingRuleService.update(id as string, ruleData);
+
+      if (!updatedRule) {
+        res.status(404).json({ success: false, error: "Regra não encontrada para atualização." });
+        return;
+      }
+
+      res.json({ success: true, data: updatedRule });
+    } catch (err: any) {
+      console.error("❌ Erro no DecodingController.update:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  };
+
+
   /**
    * DELETE /api/decoding/rules/:id
    */
