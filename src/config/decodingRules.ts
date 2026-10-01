@@ -42,6 +42,43 @@ export const AimaEnergyRules: IDecodingRule[] = [
     offset: 0,
     unit: "%"
   },
+
+   {
+    id: "aima_battery_02_current",
+    canId: "0x00000012",
+    signalName: "BatteryCurrent_02",
+    startBit: 0, // Corrente em data[0] e data[1]
+    bitLength: 16,
+    byteOrder: "little",
+    signed: true, // Inteiro Sinalizado (16-bit)
+    factor: 0.01, // Dividido por 100.0
+    offset: 0,
+    unit: "A",
+  },
+  {
+    id: "aima_battery_02_voltage",
+    canId: "0x00000012",
+    signalName: "BatteryVoltage_01",
+    startBit: 16, // Tensão em data[2] e data[3]
+    bitLength: 16,
+    byteOrder: "little",
+    signed: false, // Inteiro Não Sinalizado (16-bit)
+    factor: 0.01, // Dividido por 100.0
+    offset: 0,
+    unit: "V"
+  },
+  {
+    id: "aima_battery_02_soc",
+    canId: "0x00000012",
+    signalName: "BatterySOC_02",
+    startBit: 32, // SOC em data[4]
+    bitLength: 8,
+    byteOrder: "big",
+    signed: false,
+    factor: 1,
+    offset: 0,
+    unit: "%"
+  },
   /*
   // Regras idênticas para o CAN ID 0x32A
   {
