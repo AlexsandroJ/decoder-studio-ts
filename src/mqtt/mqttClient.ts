@@ -5,10 +5,10 @@ import * as fs from 'fs';
 import path from 'path';
 import * as mqtt from 'mqtt';
 import { v4 as uuid } from 'uuid';
-import { ICanFrame, IUnifiedRecord, ISensorData } from '../types'; // ✅ NOVO: Adicionado ISensorData
+import { ICanFrame, IUnifiedRecord, ISensorData } from '../types'; 
 import CanFrameModel from '../models/CanFrameModel';
-import UnifiedDataService from '../services/UnifiedDataService'; // ⚠️ Verifique se o caminho ainda é este ou se mudou para '../models/UnifiedDataModel'
-import { SensorDataService } from '../models/SensorDataModel';   // ✅ NOVO: Import do serviço de Sensor
+import UnifiedDataService from '../services/UnifiedDataService'; 
+import { SensorDataService } from '../models/SensorDataModel';   
 
 // ════════════════════════════════════════════════════════
 //  TIPOS
@@ -23,12 +23,11 @@ interface CanPayload {
   interface?: string;
 }
 
-// ✅ NOVO: Payload de Sensor (baseado no seu Schema/Controller)
 interface SensorPayload {
   id?: string;
   sensorId: string;
   sensorType?: string;
-  value: any; // number, string, boolean, ou object
+  value: any; 
   unit?: string;
   timestamp?: number;
   metadata?: Record<string, any>;
@@ -51,10 +50,18 @@ type MqttPayload = CanPayload | SensorPayload | CustomPayload;
 // ════════════════════════════════════════════════════════
 
 const MQTT_BROKER = process.env.MQTT_BROKER || 'mqtt://localhost:1883';
-// ✅ DICA: Você pode usar um array de tópicos se quiser separar, ex: ['can/data', 'sensors/data']
-const MQTT_TOPIC = process.env.MQTT_TOPIC || 'can/data'; 
+// ⚠️ RECOMENDADO: Use a estrutura de tópicos com wildcard para capturar todas as motos e tipos
+
+const MQTT_TOPICS_RAW = process.env.MQTT_TOPIC || 'moto/+/can, /moto/+/sensores';
+const MQTT_TOPIC: string[] = MQTT_TOPICS_RAW
+  .split(',')
+  .map(t => t.trim())
+  .filter(t => t.length > 0);
+
+
 
 let client: mqtt.MqttClient | null = null;
+let latencyInterval: NodeJS.Timeout | null = null; // Controle do intervalo de latência
 
 // ════════════════════════════════════════════════════════
 //  FUNÇÕES DE DETECÇÃO E CONVERSÃO
@@ -64,7 +71,6 @@ function isCanPayload(payload: any): payload is CanPayload {
   return typeof payload === 'object' && payload !== null && payload.canId !== undefined && payload.data !== undefined;
 }
 
-// ✅ NOVO: Detecta se o payload é um dado de Sensor
 function isSensorPayload(payload: any): payload is SensorPayload {
   return typeof payload === 'object' && payload !== null && payload.sensorId !== undefined && payload.value !== undefined;
 }
@@ -81,7 +87,7 @@ function canPayloadToFrame(payload: CanPayload): ICanFrame {
     canId: payload.canId,
     dlc: payload.dlc ?? Math.ceil(dataHex.length / 2),
     data: dataHex,
-    timestamp: payload.timestamp ?? Date.now(),
+    timestamp: Date.now(),
     interface: payload.interface || 'mqtt',
   };
 }
@@ -116,30 +122,25 @@ async function processCanFrames(payloads: CanPayload[]): Promise<ICanFrame[]> {
   return saved;
 }
 
-// ✅ NOVO: Processa e salva dados de Sensores vindos do MQTT
 async function processSensorData(payloads: SensorPayload[]): Promise<ISensorData[]> {
-  // 1. Normalização segura (espelhando a lógica exata do seu Controller)
   const readings: Partial<ISensorData>[] = payloads.map((s: any) => ({
     id: s.id || uuid(),
     sensorId: String(s.sensorId),
     sensorType: String(s.sensorType || "generic"),
     value: s.value,
     unit: s.unit ? String(s.unit) : undefined,
-    timestamp: s.timestamp || Date.now(),
+    timestamp: s.timestamp,
     metadata: s.metadata || undefined,
     deviceId: s.deviceId ? String(s.deviceId) : undefined
   }));
 
-  // 2. Validação estrita
   const invalid = readings.filter(r => !r.sensorId);
   if (invalid.length > 0) {
     throw new Error(`${invalid.length} leitura(s) de sensor inválida(s): 'sensorId' é obrigatório.`);
   }
 
-  // 3. Salvamento no modelo de Sensores
   const saved = await SensorDataService.insertMany(readings);
 
-  // 4. Mapeamento para o formato Unificado (IUnifiedRecord)
   const unifiedRecords: Partial<IUnifiedRecord>[] = saved.map((s: any) => ({
     id: uuid(),
     timestamp: s.timestamp,
@@ -167,18 +168,17 @@ async function processCustomData(payloads: CustomPayload[]): Promise<IUnifiedRec
   return saved;
 }
 
-// ✅ ATUALIZADO: Roteiriza o payload para o processador correto (agora inclui sensores)
 async function processMqttMessage(rawData: any): Promise<void> {
   const payloads: any[] = Array.isArray(rawData) ? rawData : [rawData];
 
   const canPayloads: CanPayload[] = [];
-  const sensorPayloads: SensorPayload[] = []; // ✅ NOVO
+  const sensorPayloads: SensorPayload[] = [];
   const customPayloads: CustomPayload[] = [];
 
   payloads.forEach(p => {
     if (isCanPayload(p)) {
       canPayloads.push(p);
-    } else if (isSensorPayload(p)) { // ✅ NOVO
+    } else if (isSensorPayload(p)) {
       sensorPayloads.push(p);
     } else {
       customPayloads.push(p);
@@ -187,17 +187,136 @@ async function processMqttMessage(rawData: any): Promise<void> {
 
   const promises: Promise<any>[] = [];
 
-  if (canPayloads.length > 0) {
-    promises.push(processCanFrames(canPayloads));
-  }
-  if (sensorPayloads.length > 0) { // ✅ NOVO
-    promises.push(processSensorData(sensorPayloads));
-  }
-  if (customPayloads.length > 0) {
-    promises.push(processCustomData(customPayloads));
-  }
+  if (canPayloads.length > 0) promises.push(processCanFrames(canPayloads));
+  if (sensorPayloads.length > 0) promises.push(processSensorData(sensorPayloads));
+  if (customPayloads.length > 0) promises.push(processCustomData(customPayloads));
 
   await Promise.all(promises);
+}
+
+// ════════════════════════════════════════════════════════
+//  MONITORAMENTO DE LATÊNCIA (NOVO)
+// ════════════════════════════════════════════════════════
+
+// Estatísticas para média móvel (últimos 10 RTTs)
+const rttHistory: number[] = [];
+const RTT_HISTORY_SIZE = 10;
+
+/**
+ * Envia um ping e mede o RTT (tempo até receber o PUBACK do broker)
+ * Retorna o RTT em ms, ou null se falhar
+ */
+export function sendLatencyPing(deviceId: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    if (!client || !client.connected) {
+      console.warn("⚠️ Cliente MQTT não conectado. Ping ignorado.");
+      resolve(null);
+      return;
+    }
+
+    const sentAt = Date.now();
+    const topic = `moto/${deviceId}`;
+
+    const payload = {
+      deviceId: deviceId,
+      sensorId: "latência api",
+      sensorType: "latência",
+      value: 0,
+      unit: "ms",
+      timestamp: sentAt, // Usado pela regra SQL para calcular latência de ida
+      metadata: {
+        source: "nodejs_can_studio",
+        original_time: sentAt,
+        measureType: "round_trip"
+      }
+    };
+
+    // ⚡ O callback é chamado quando o PUBACK chega (QoS 1)
+    client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
+      const receivedAt = Date.now();
+      
+      if (err) {
+        console.error(`❌ Erro ao enviar ping (sem PUBACK):`, err.message);
+        resolve(null);
+        return;
+      }
+
+      const rtt = receivedAt - sentAt;
+      
+      // Atualiza histórico (média móvel)
+      rttHistory.push(rtt);
+      if (rttHistory.length > RTT_HISTORY_SIZE) {
+        rttHistory.shift();
+      }
+      
+      const avgRtt = rttHistory.reduce((a, b) => a + b, 0) / rttHistory.length;
+
+      console.log(
+        `🏓 [RTT] ${deviceId} | ` +
+        `Atual: ${rtt}ms | ` +
+        `Média (últimos ${rttHistory.length}): ${avgRtt.toFixed(1)}ms | ` +
+        `Min: ${Math.min(...rttHistory)}ms | ` +
+        `Max: ${Math.max(...rttHistory)}ms`
+      );
+
+      // Opcional: Publica o RTT em um tópico de métricas para o dashboard
+      if (client.connected) {
+        const rttMetric = {
+          deviceId: deviceId,
+          sensorId: "MQTT_RTT",
+          sensorType: "network_health",
+          value: rtt,
+          unit: "ms",
+          timestamp: receivedAt,
+          metadata: {
+            avg: Number(avgRtt.toFixed(2)),
+            min: Math.min(...rttHistory),
+            max: Math.max(...rttHistory),
+            samples: rttHistory.length
+          }
+        };
+        
+        client.publish(
+          `metrics/moto/${deviceId}/rtt`,
+          JSON.stringify(rttMetric),
+          { qos: 0 } // Métrica pode perder, não é crítico
+        );
+      }
+
+      resolve(rtt);
+    });
+  });
+}
+
+/**
+ * Inicia o envio periódico de pings de latência.
+ * @param deviceId ID da moto/dispositivo (ex: 'moto_001')
+ * @param intervalMs Intervalo em milissegundos (padrão: 2000ms = 2 segundos)
+ */
+export function startLatencyMonitoring(deviceId: string, intervalMs: number = 2000): void {
+  if (latencyInterval) {
+    clearInterval(latencyInterval);
+  }
+  
+  console.log(`⏱️ Iniciando monitoramento de latência (RTT + One-Way) para '${deviceId}' a cada ${intervalMs}ms`);
+  
+  // Envia o primeiro imediatamente
+  sendLatencyPing(deviceId);
+  
+  latencyInterval = setInterval(() => {
+    sendLatencyPing(deviceId);
+  }, intervalMs);
+}
+
+/**
+ * Interrompe o envio periódico de pings de latência.
+ */
+export function stopLatencyMonitoring(): void {
+  if (latencyInterval) {
+    clearInterval(latencyInterval);
+    latencyInterval = null;
+    console.log("⏹️ Monitoramento de latência interrompido.");
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -248,9 +367,7 @@ export function connectMQTT(): void {
     try {
       const payloadStr = message.toString();
       const rawData = JSON.parse(payloadStr);
-
       await processMqttMessage(rawData);
-
     } catch (error: any) {
       console.error('❌ Erro ao processar mensagem MQTT:', error.message);
       console.error('📦 Payload bruto:', message.toString());
@@ -271,6 +388,8 @@ export function connectMQTT(): void {
 }
 
 export async function disconnectMQTT(): Promise<void> {
+  stopLatencyMonitoring(); // Garante que o intervalo seja limpo ao desconectar
+  
   if (client) {
     console.log('🛑 Desconectando do broker MQTT...');
     await client.endAsync();
